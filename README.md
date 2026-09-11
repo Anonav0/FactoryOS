@@ -606,13 +606,13 @@ Consistent JSON ErrorResponse (No Stack Traces, No Internal SQL Leakage)
 
 ### HTTP Status Code Mapping
 
-| HTTP Status | Category | Typical Causes |
-| :--- | :--- | :--- |
-| **`400 Bad Request`** | Input / Validation / Malformed | Field validation failure, constraint violation, malformed JSON body, unparseable data types, missing required query parameters, or business rule conflicts. |
-| **`404 Not Found`** | Resource Missing | Nonexistent product, supplier, inventory record, purchase order ID, or unmapped URL path. |
-| **`405 Method Not Allowed`** | Invalid HTTP Method | Using an unsupported HTTP verb (e.g. `PATCH` on a resource that only supports `GET`/`PUT`). |
-| **`409 Conflict`** | State & Integrity Conflict | Duplicate SKU, insufficient available stock on stock-out, illegal purchase order state transitions, duplicate receipt, cancellation of received orders, concurrent modification (optimistic lock), or database unique constraints. |
-| **`500 Internal Server Error`** | Server-Side Exception | Unhandled runtime errors. Logged with full stack traces on the server; client receives a sanitized response with zero internal leakage. |
+| HTTP Status                     | Category                       | Typical Causes                                                                                                                                                                                                                     |
+| :------------------------------ | :----------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`400 Bad Request`**           | Input / Validation / Malformed | Field validation failure, constraint violation, malformed JSON body, unparseable data types, missing required query parameters, or business rule conflicts.                                                                        |
+| **`404 Not Found`**             | Resource Missing               | Nonexistent product, supplier, inventory record, purchase order ID, or unmapped URL path.                                                                                                                                          |
+| **`405 Method Not Allowed`**    | Invalid HTTP Method            | Using an unsupported HTTP verb (e.g. `PATCH` on a resource that only supports `GET`/`PUT`).                                                                                                                                        |
+| **`409 Conflict`**              | State & Integrity Conflict     | Duplicate SKU, insufficient available stock on stock-out, illegal purchase order state transitions, duplicate receipt, cancellation of received orders, concurrent modification (optimistic lock), or database unique constraints. |
+| **`500 Internal Server Error`** | Server-Side Exception          | Unhandled runtime errors. Logged with full stack traces on the server; client receives a sanitized response with zero internal leakage.                                                                                            |
 
 ### Standard JSON Error Envelope
 
@@ -639,6 +639,7 @@ Every error response adheres to the `ErrorResponse` schema:
 ### Error Response Examples
 
 #### 1. Validation Failure (`400 Bad Request`)
+
 ```json
 {
   "timestamp": "2026-09-11T16:11:23.134043Z",
@@ -654,6 +655,7 @@ Every error response adheres to the `ErrorResponse` schema:
 ```
 
 #### 2. Malformed Request Body (`400 Bad Request`)
+
 ```json
 {
   "timestamp": "2026-09-11T16:10:39.424452Z",
@@ -665,6 +667,7 @@ Every error response adheres to the `ErrorResponse` schema:
 ```
 
 #### 3. Resource Not Found (`404 Not Found`)
+
 ```json
 {
   "timestamp": "2026-09-11T16:11:06.946156Z",
@@ -676,6 +679,7 @@ Every error response adheres to the `ErrorResponse` schema:
 ```
 
 #### 4. Insufficient Stock Conflict (`409 Conflict`)
+
 ```json
 {
   "timestamp": "2026-09-11T16:11:14.515347Z",
@@ -687,6 +691,7 @@ Every error response adheres to the `ErrorResponse` schema:
 ```
 
 #### 5. Invalid Purchase Order State Transition (`409 Conflict`)
+
 ```json
 {
   "timestamp": "2026-09-11T16:11:26.668292Z",
