@@ -1,7 +1,13 @@
 import React from "react";
-import { Eye } from "lucide-react";
+import { Eye, CheckCircle, PackageCheck, Ban } from "lucide-react";
 
-export function PurchaseOrderTable({ orders, onViewDetails }) {
+export function PurchaseOrderTable({
+  orders,
+  onViewDetails,
+  onApprove,
+  onReceive,
+  onCancel,
+}) {
   const formatCurrency = (val) => {
     if (val === null || val === undefined) return "—";
     return new Intl.NumberFormat("en-IN", {
@@ -43,7 +49,7 @@ export function PurchaseOrderTable({ orders, onViewDetails }) {
         );
       case "APPROVED":
         return (
-          <span className="badge badge-active">
+          <span className="badge badge-lowstock">
             <span style={{ fontSize: "10px" }}>●</span> APPROVED
           </span>
         );
@@ -80,8 +86,8 @@ export function PurchaseOrderTable({ orders, onViewDetails }) {
               <th className="text-right" style={{ width: "130px" }}>
                 Total Amount
               </th>
-              <th style={{ width: "110px" }}>Status</th>
-              <th className="text-right" style={{ width: "120px" }}>
+              <th style={{ width: "120px" }}>Status</th>
+              <th className="text-right" style={{ width: "260px" }}>
                 Actions
               </th>
             </tr>
@@ -129,6 +135,71 @@ export function PurchaseOrderTable({ orders, onViewDetails }) {
                     className="action-buttons"
                     style={{ justifyContent: "flex-end" }}
                   >
+                    {/* CREATED state actions */}
+                    {po.status === "CREATED" && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            color: "var(--primary)",
+                            borderColor: "var(--primary-border)",
+                          }}
+                          onClick={() => onApprove(po)}
+                          title="Approve purchase order"
+                        >
+                          <CheckCircle size={13} />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            color: "var(--danger)",
+                            borderColor: "var(--danger-border)",
+                          }}
+                          onClick={() => onCancel(po)}
+                          title="Cancel purchase order"
+                        >
+                          <Ban size={13} />
+                          <span>Cancel</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* APPROVED state actions */}
+                    {po.status === "APPROVED" && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            color: "var(--success)",
+                            borderColor: "var(--success-border)",
+                          }}
+                          onClick={() => onReceive(po)}
+                          title="Receive goods into inventory"
+                        >
+                          <PackageCheck size={13} />
+                          <span>Receive</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            color: "var(--danger)",
+                            borderColor: "var(--danger-border)",
+                          }}
+                          onClick={() => onCancel(po)}
+                          title="Cancel purchase order"
+                        >
+                          <Ban size={13} />
+                          <span>Cancel</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* All states can view details */}
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"

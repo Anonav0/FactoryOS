@@ -15,5 +15,11 @@ public interface PurchaseOrderService {
     PurchaseOrderResponse getPurchaseOrderById(Long id);
 
     PurchaseOrderResponse getPurchaseOrderByOrderNumber(String orderNumber);
+
+    PurchaseOrderResponse approvePurchaseOrder(Long id);
+
+    PurchaseOrderResponse receivePurchaseOrder(Long id);
+
+    PurchaseOrderResponse cancelPurchaseOrder(Long id);
 }
 

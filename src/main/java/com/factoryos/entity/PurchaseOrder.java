@@ -78,6 +78,9 @@ public class PurchaseOrder {
     @Builder.Default
     private List<PurchaseOrderItem> items = new ArrayList<>();
 
+    @jakarta.persistence.Version
+    private Long version;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

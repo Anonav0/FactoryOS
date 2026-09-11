@@ -3,17 +3,25 @@ import { purchaseOrdersApi } from "../api/purchaseOrders";
 import { PurchaseOrderTable } from "../components/purchaseOrders/PurchaseOrderTable";
 import { CreatePurchaseOrderModal } from "../components/purchaseOrders/CreatePurchaseOrderModal";
 import { PurchaseOrderDetailsModal } from "../components/purchaseOrders/PurchaseOrderDetailsModal";
+import { ConfirmModal } from "../components/common/ConfirmModal";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { EmptyState } from "../components/common/EmptyState";
+import { useToast } from "../context/ToastContext";
 import { ShoppingCart, Plus, RefreshCw } from "lucide-react";
 
 export function PurchaseOrdersPage() {
+  const toast = useToast();
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+
+  // Workflow confirmation state
+  const [receiveConfirmOrder, setReceiveConfirmOrder] = useState(null);
+  const [cancelConfirmOrder, setCancelConfirmOrder] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchOrders = async () => {
     setIsLoading(true);
@@ -34,6 +42,58 @@ export function PurchaseOrdersPage() {
 
   const handleCreateSuccess = () => {
     fetchOrders();
+  };
+
+  const handleApprove = async (po) => {
+    try {
+      await purchaseOrdersApi.approve(po.id);
+      toast.success(`Purchase order ${po.orderNumber} approved successfully.`);
+      await fetchOrders();
+    } catch (err) {
+      toast.error(
+        err.message || `Failed to approve purchase order ${po.orderNumber}.`,
+      );
+    }
+  };
+
+  const handleConfirmReceive = async () => {
+    if (!receiveConfirmOrder) return;
+    setIsProcessing(true);
+    try {
+      await purchaseOrdersApi.receive(receiveConfirmOrder.id);
+      toast.success(
+        `Purchase order ${receiveConfirmOrder.orderNumber} received successfully. Inventory has been updated.`,
+      );
+      setReceiveConfirmOrder(null);
+      await fetchOrders();
+    } catch (err) {
+      toast.error(
+        err.message ||
+          `Failed to receive purchase order ${receiveConfirmOrder.orderNumber}.`,
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelConfirmOrder) return;
+    setIsProcessing(true);
+    try {
+      await purchaseOrdersApi.cancel(cancelConfirmOrder.id);
+      toast.info(
+        `Purchase order ${cancelConfirmOrder.orderNumber} has been cancelled.`,
+      );
+      setCancelConfirmOrder(null);
+      await fetchOrders();
+    } catch (err) {
+      toast.error(
+        err.message ||
+          `Failed to cancel purchase order ${cancelConfirmOrder.orderNumber}.`,
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -97,6 +157,9 @@ export function PurchaseOrdersPage() {
         <PurchaseOrderTable
           orders={orders}
           onViewDetails={(po) => setSelectedOrderId(po.id)}
+          onApprove={handleApprove}
+          onReceive={(po) => setReceiveConfirmOrder(po)}
+          onCancel={(po) => setCancelConfirmOrder(po)}
         />
       )}
 
@@ -112,6 +175,30 @@ export function PurchaseOrdersPage() {
         isOpen={Boolean(selectedOrderId)}
         onClose={() => setSelectedOrderId(null)}
         orderId={selectedOrderId}
+      />
+
+      {/* Receive Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(receiveConfirmOrder)}
+        onClose={() => !isProcessing && setReceiveConfirmOrder(null)}
+        onConfirm={handleConfirmReceive}
+        title="Receive Purchase Order?"
+        message={`Receiving this order (${receiveConfirmOrder?.orderNumber}) will add all ordered quantities to inventory and create stock movements. This action cannot be undone.`}
+        confirmText="Receive Goods"
+        confirmVariant="primary"
+        isLoading={isProcessing}
+      />
+
+      {/* Cancel Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(cancelConfirmOrder)}
+        onClose={() => !isProcessing && setCancelConfirmOrder(null)}
+        onConfirm={handleConfirmCancel}
+        title="Cancel Purchase Order?"
+        message={`This purchase order (${cancelConfirmOrder?.orderNumber}) will be marked as cancelled and cannot be processed further.`}
+        confirmText="Cancel Order"
+        confirmVariant="danger"
+        isLoading={isProcessing}
       />
     </div>
   );

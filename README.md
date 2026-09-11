@@ -63,6 +63,15 @@ PostgreSQL Database (factoryos)
 
 ### Currently Implemented (Phases 1, 2, 3, 3.5 & 4)
 
+- [x] **Purchase Order Workflow (Phase 5)**:
+  - Formal domain state machine: `CREATED -> APPROVED -> RECEIVED`, `CREATED -> CANCELLED`, `APPROVED -> CANCELLED`.
+  - Strict terminal state guarantees: orders in `RECEIVED` or `CANCELLED` cannot transition further; invalid transitions are rejected with HTTP 409 Conflict.
+  - Non-generic status updates: state transitions are isolated behind dedicated business endpoints (`approve`, `receive`, `cancel`), preventing arbitrary status modifications.
+  - Fully atomic `@Transactional` receiving boundary: increments `Inventory.quantityAvailable`, generates individual `STOCK_IN` audit records per PO item, and transitions PO status to `RECEIVED` as the final step.
+  - Rollback safety: if any item or inventory update fails, all database changes roll back completely, preventing partial stock updates.
+  - Cancellation safety: cancelling an order updates status to `CANCELLED` without mutating inventory or recording stock movements; cancellation of received orders is strictly disallowed.
+  - Optimistic locking via `@Version` on `PurchaseOrder` preventing concurrent receiving collisions.
+  - Frontend workflow integration: dynamic action buttons (`Approve`, `Receive`, `Cancel`, `Details`), destructive/permanent action confirmation modals, accessible badges, and auto-dismissing toast notifications.
 - [x] **Purchase Order Management (Phase 4)**:
   - Multi-item Purchase Orders linked to Suppliers (`ManyToOne`) and Products (`ManyToOne`).
   - Strict inventory isolation: PO creation records procurement intent without mutating inventory balances.
@@ -105,14 +114,13 @@ PostgreSQL Database (factoryos)
   - Real-time low-stock detection (`quantityAvailable <= reorderLevel`) queried at the database layer (`GET /api/inventory/low-stock`).
   - Optimistic locking via `@Version` to protect against concurrent update collisions.
   - Restriction of stock movements on inactive products.
-- [x] **Centralized Exception Handling**: Uniform error envelopes (`ErrorResponse`) for 400 (Validation / Rule), 404 (Not Found), 409 (Conflict / Insufficient Stock / Duplicate), and 500 (Internal Error).
-- [x] **Automated Testing Suite**: 68 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
+- [x] **Centralized Exception Handling**: Uniform error envelopes (`ErrorResponse`) for 400 (Validation / Rule), 404 (Not Found), 409 (Conflict / Insufficient Stock / Duplicate / Invalid PO State), and 500 (Internal Error).
+- [x] **Automated Testing Suite**: 75 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
 - [x] **Health Check Endpoint**: `GET /api/health` returning operational status.
 
 ### Planned Features (Upcoming Phases)
 
-- [ ] **PO Receiving & Approval Workflows (Phase 5)**: PO status transitions (`APPROVED`, `RECEIVED`, `CANCELLED`) and automatic inventory updates upon goods receipt
-- [ ] **Supplier Catalog Integration**: Product-supplier pricing agreements and lead times
+- [ ] **Supplier Catalog Integration (Phase 6)**: Product-supplier pricing agreements and lead times
 - [ ] **Authentication & Authorization**: Role-based access control and security
 
 ---
@@ -501,6 +509,32 @@ FactoryOS
 - **Path**: `/api/purchase-orders/order-number/{orderNumber}`
 - **Response (`200 OK`)**: Returns complete `PurchaseOrderResponse`.
 
+#### 5. Approve Purchase Order
+
+- **Method**: `POST`
+- **Path**: `/api/purchase-orders/{id}/approve`
+- **Preconditions**: Status must be `CREATED`, supplier and all products must be active.
+- **Response (`200 OK`)**: Returns updated `PurchaseOrderResponse` with `status: "APPROVED"`.
+- **Error (`409 Conflict`)**: If PO is already `APPROVED`, `RECEIVED`, or `CANCELLED`.
+
+#### 6. Receive Purchase Order (Atomic Inventory Receipt)
+
+- **Method**: `POST`
+- **Path**: `/api/purchase-orders/{id}/receive`
+- **Preconditions**: Status must be `APPROVED`.
+- **Side Effects**: Atomic transaction increments `Inventory.quantityAvailable` for all PO items, creates individual `STOCK_IN` movements referencing the PO order number, and transitions status to `RECEIVED`.
+- **Response (`200 OK`)**: Returns updated `PurchaseOrderResponse` with `status: "RECEIVED"`.
+- **Error (`409 Conflict`)**: If PO is in `CREATED` (not yet approved), already `RECEIVED`, or `CANCELLED`.
+
+#### 7. Cancel Purchase Order
+
+- **Method**: `POST`
+- **Path**: `/api/purchase-orders/{id}/cancel`
+- **Preconditions**: Status must be `CREATED` or `APPROVED`.
+- **Side Effects**: Transitions status to `CANCELLED`. Zero inventory changes, zero stock movements created.
+- **Response (`200 OK`)**: Returns updated `PurchaseOrderResponse` with `status: "CANCELLED"`.
+- **Error (`409 Conflict`)**: If PO is already `RECEIVED` (cancellation after receipt is strictly prohibited) or already `CANCELLED`.
+
 ---
 
 ## Example End-to-End Inventory Lifecycle Workflow
@@ -525,6 +559,15 @@ The complete end-to-end lifecycle demonstrates how the system maintains accurate
 6. **Step 6 — Stock Adjustment**:
    `POST /api/inventory/adjust` with `newQuantity = 95`.
    - Inventory balance updates to `95`. An `ADJUSTMENT` movement is recorded with delta `+80`.
+7. **Step 7 — Procurement Order Created & Approved (Phase 5)**:
+   - Create PO: `POST /api/purchase-orders` for 20 units of `PMP-3001`. Status is `CREATED`. Inventory remains `95`.
+   - Direct receive attempt is rejected: `POST /api/purchase-orders/{id}/receive` returns `409 Conflict` ("Only APPROVED purchase orders can be received").
+   - Approve PO: `POST /api/purchase-orders/{id}/approve`. Status becomes `APPROVED`. Inventory still remains `95`.
+8. **Step 8 — Atomic Goods Receipt (Phase 5)**:
+   - Receive PO: `POST /api/purchase-orders/{id}/receive`.
+   - Inventory atomically increases: `95 + 20 = 115`.
+   - A `STOCK_IN` movement is logged referencing `PO-000003` with reason `"Purchase order received"`.
+   - PO status becomes `RECEIVED`. Duplicate receive or cancellation attempts return `409 Conflict`.
 
 ---
 

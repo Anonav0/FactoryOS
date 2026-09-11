@@ -205,5 +205,92 @@ class PurchaseOrderControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Purchase order not found with id: 999"));
     }
+
+    @Test
+    @DisplayName("POST /api/purchase-orders/{id}/approve returns 200 OK with status APPROVED")
+    void approvePurchaseOrder_returns200() throws Exception {
+        PurchaseOrderResponse response = new PurchaseOrderResponse(
+                100L,
+                "PO-000001",
+                1L,
+                "Apex Tools",
+                PurchaseOrderStatus.APPROVED,
+                LocalDate.now(),
+                LocalDate.now().plusDays(10),
+                new BigDecimal("4500.00"),
+                Collections.emptyList(),
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(purchaseOrderService.approvePurchaseOrder(100L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/purchase-orders/100/approve"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.orderNumber").value("PO-000001"));
+    }
+
+    @Test
+    @DisplayName("POST /api/purchase-orders/{id}/receive returns 200 OK with status RECEIVED")
+    void receivePurchaseOrder_returns200() throws Exception {
+        PurchaseOrderResponse response = new PurchaseOrderResponse(
+                100L,
+                "PO-000001",
+                1L,
+                "Apex Tools",
+                PurchaseOrderStatus.RECEIVED,
+                LocalDate.now(),
+                LocalDate.now().plusDays(10),
+                new BigDecimal("4500.00"),
+                Collections.emptyList(),
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(purchaseOrderService.receivePurchaseOrder(100L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/purchase-orders/100/receive"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RECEIVED"))
+                .andExpect(jsonPath("$.orderNumber").value("PO-000001"));
+    }
+
+    @Test
+    @DisplayName("POST /api/purchase-orders/{id}/receive returns 409 Conflict when transition is invalid")
+    void receivePurchaseOrder_invalidState_returns409() throws Exception {
+        when(purchaseOrderService.receivePurchaseOrder(100L))
+                .thenThrow(new com.factoryos.exception.InvalidPurchaseOrderStateException("Purchase order PO-000001 cannot be received because its current status is CREATED"));
+
+        mockMvc.perform(post("/api/purchase-orders/100/receive"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Invalid Purchase Order State"))
+                .andExpect(jsonPath("$.message").value("Purchase order PO-000001 cannot be received because its current status is CREATED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/purchase-orders/{id}/cancel returns 200 OK with status CANCELLED")
+    void cancelPurchaseOrder_returns200() throws Exception {
+        PurchaseOrderResponse response = new PurchaseOrderResponse(
+                100L,
+                "PO-000001",
+                1L,
+                "Apex Tools",
+                PurchaseOrderStatus.CANCELLED,
+                LocalDate.now(),
+                LocalDate.now().plusDays(10),
+                new BigDecimal("4500.00"),
+                Collections.emptyList(),
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(purchaseOrderService.cancelPurchaseOrder(100L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/purchase-orders/100/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.orderNumber").value("PO-000001"));
+    }
 }
 

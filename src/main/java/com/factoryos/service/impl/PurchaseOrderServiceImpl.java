@@ -4,16 +4,23 @@ import com.factoryos.dto.CreatePurchaseOrderRequest;
 import com.factoryos.dto.PurchaseOrderItemRequest;
 import com.factoryos.dto.PurchaseOrderResponse;
 import com.factoryos.dto.PurchaseOrderSummaryResponse;
+import com.factoryos.entity.Inventory;
 import com.factoryos.entity.Product;
 import com.factoryos.entity.PurchaseOrder;
 import com.factoryos.entity.PurchaseOrderItem;
 import com.factoryos.entity.PurchaseOrderStatus;
+import com.factoryos.entity.StockMovement;
+import com.factoryos.entity.StockMovementType;
 import com.factoryos.entity.Supplier;
 import com.factoryos.exception.BusinessRuleException;
+import com.factoryos.exception.InvalidPurchaseOrderStateException;
+import com.factoryos.exception.InventoryNotFoundException;
 import com.factoryos.exception.ResourceNotFoundException;
 import com.factoryos.mapper.PurchaseOrderMapper;
+import com.factoryos.repository.InventoryRepository;
 import com.factoryos.repository.ProductRepository;
 import com.factoryos.repository.PurchaseOrderRepository;
+import com.factoryos.repository.StockMovementRepository;
 import com.factoryos.repository.SupplierRepository;
 import com.factoryos.service.PurchaseOrderService;
 import org.springframework.stereotype.Service;
@@ -32,17 +39,23 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
+    private final InventoryRepository inventoryRepository;
+    private final StockMovementRepository stockMovementRepository;
     private final PurchaseOrderMapper purchaseOrderMapper;
 
     public PurchaseOrderServiceImpl(
             PurchaseOrderRepository purchaseOrderRepository,
             SupplierRepository supplierRepository,
             ProductRepository productRepository,
+            InventoryRepository inventoryRepository,
+            StockMovementRepository stockMovementRepository,
             PurchaseOrderMapper purchaseOrderMapper
     ) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.supplierRepository = supplierRepository;
         this.productRepository = productRepository;
+        this.inventoryRepository = inventoryRepository;
+        this.stockMovementRepository = stockMovementRepository;
         this.purchaseOrderMapper = purchaseOrderMapper;
     }
 
@@ -149,6 +162,126 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return purchaseOrderMapper.toResponse(po);
     }
 
+    @Override
+    @Transactional
+    public PurchaseOrderResponse approvePurchaseOrder(Long id) {
+        PurchaseOrder po = purchaseOrderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + id));
+
+        // State machine transition validation
+        if (po.getStatus() == PurchaseOrderStatus.APPROVED) {
+            throw new InvalidPurchaseOrderStateException("Purchase order " + po.getOrderNumber() + " is already approved");
+        }
+        if (po.getStatus() == PurchaseOrderStatus.RECEIVED) {
+            throw new InvalidPurchaseOrderStateException("Cannot approve purchase order " + po.getOrderNumber() + " because it is already received");
+        }
+        if (po.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new InvalidPurchaseOrderStateException("Cannot approve purchase order " + po.getOrderNumber() + " because it has been cancelled");
+        }
+        if (po.getStatus() != PurchaseOrderStatus.CREATED) {
+            throw new InvalidPurchaseOrderStateException("Purchase order " + po.getOrderNumber() + " cannot be approved from status: " + po.getStatus());
+        }
+
+        // Structural integrity verification
+        if (Boolean.FALSE.equals(po.getSupplier().getActive())) {
+            throw new BusinessRuleException("Cannot approve purchase order for inactive supplier: " + po.getSupplier().getName());
+        }
+
+        if (po.getItems() == null || po.getItems().isEmpty()) {
+            throw new BusinessRuleException("Cannot approve purchase order with no line items");
+        }
+
+        for (PurchaseOrderItem item : po.getItems()) {
+            if (Boolean.FALSE.equals(item.getProduct().getActive())) {
+                throw new BusinessRuleException("Cannot approve purchase order containing inactive product: " + item.getProduct().getSku());
+            }
+        }
+
+        po.setStatus(PurchaseOrderStatus.APPROVED);
+        PurchaseOrder saved = purchaseOrderRepository.save(po);
+        return purchaseOrderMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseOrderResponse receivePurchaseOrder(Long id) {
+        PurchaseOrder po = purchaseOrderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + id));
+
+        // State machine transition validation
+        if (po.getStatus() == PurchaseOrderStatus.RECEIVED) {
+            throw new InvalidPurchaseOrderStateException("Purchase order " + po.getOrderNumber() + " has already been received");
+        }
+        if (po.getStatus() == PurchaseOrderStatus.CREATED) {
+            throw new InvalidPurchaseOrderStateException("Purchase order " + po.getOrderNumber() + " cannot be received because its current status is CREATED. Only APPROVED purchase orders can be received.");
+        }
+        if (po.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new InvalidPurchaseOrderStateException("Cannot receive purchase order " + po.getOrderNumber() + " because it has been cancelled");
+        }
+        if (po.getStatus() != PurchaseOrderStatus.APPROVED) {
+            throw new InvalidPurchaseOrderStateException("Purchase order " + po.getOrderNumber() + " cannot be received from status: " + po.getStatus());
+        }
+
+        if (po.getItems() == null || po.getItems().isEmpty()) {
+            throw new BusinessRuleException("Cannot receive purchase order with no line items");
+        }
+
+        // Atomic processing of all line items
+        for (PurchaseOrderItem item : po.getItems()) {
+            Product product = item.getProduct();
+            if (Boolean.FALSE.equals(product.getActive())) {
+                throw new BusinessRuleException("Cannot receive purchase order containing inactive product: " + product.getSku());
+            }
+
+            // 1. Update Inventory for each item
+            Inventory inventory = inventoryRepository.findByProductId(product.getId())
+                    .orElseThrow(() -> new InventoryNotFoundException("Inventory not found for product: " + product.getSku()));
+
+            inventory.setQuantityAvailable(inventory.getQuantityAvailable() + item.getQuantity());
+            inventoryRepository.save(inventory);
+
+            // 2. Create StockMovement audit record
+            StockMovement movement = StockMovement.builder()
+                    .product(product)
+                    .movementType(StockMovementType.STOCK_IN)
+                    .quantity(item.getQuantity())
+                    .reference(po.getOrderNumber())
+                    .reason("Purchase order received")
+                    .build();
+
+            stockMovementRepository.save(movement);
+        }
+
+        // 3. Mark PO as RECEIVED last
+        po.setStatus(PurchaseOrderStatus.RECEIVED);
+        PurchaseOrder saved = purchaseOrderRepository.save(po);
+
+        return purchaseOrderMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseOrderResponse cancelPurchaseOrder(Long id) {
+        PurchaseOrder po = purchaseOrderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + id));
+
+        if (po.getStatus() == PurchaseOrderStatus.RECEIVED) {
+            throw new InvalidPurchaseOrderStateException("Cannot cancel purchase order " + po.getOrderNumber() + " because it has already been received");
+        }
+        if (po.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new InvalidPurchaseOrderStateException("Purchase order " + po.getOrderNumber() + " is already cancelled");
+        }
+        if (po.getStatus() != PurchaseOrderStatus.CREATED && po.getStatus() != PurchaseOrderStatus.APPROVED) {
+            throw new InvalidPurchaseOrderStateException("Cannot cancel purchase order " + po.getOrderNumber() + " from status: " + po.getStatus());
+        }
+
+        // Cancel order — inventory and stock movements remain unchanged
+        po.setStatus(PurchaseOrderStatus.CANCELLED);
+        PurchaseOrder saved = purchaseOrderRepository.save(po);
+
+        return purchaseOrderMapper.toResponse(saved);
+    }
+
     private String generateUniqueOrderNumber() {
         Long nextId = purchaseOrderRepository.getMaxId() + 1;
         String candidate = String.format("PO-%06d", nextId);
@@ -159,4 +292,3 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return candidate;
     }
 }
-

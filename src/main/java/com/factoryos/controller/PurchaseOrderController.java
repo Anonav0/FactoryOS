@@ -48,5 +48,20 @@ public class PurchaseOrderController {
     public ResponseEntity<PurchaseOrderResponse> getPurchaseOrderByOrderNumber(@PathVariable String orderNumber) {
         return ResponseEntity.ok(purchaseOrderService.getPurchaseOrderByOrderNumber(orderNumber));
     }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<PurchaseOrderResponse> approvePurchaseOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(purchaseOrderService.approvePurchaseOrder(id));
+    }
+
+    @PostMapping("/{id}/receive")
+    public ResponseEntity<PurchaseOrderResponse> receivePurchaseOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(purchaseOrderService.receivePurchaseOrder(id));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<PurchaseOrderResponse> cancelPurchaseOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrder(id));
+    }
 }
 
