@@ -62,7 +62,7 @@ export async function request(endpoint, options = {}) {
   }
 
   if (!res.ok) {
-    // Backend standard ErrorResponse format: { timestamp, status, error, message, path, validationErrors }
+    // Backend standard ErrorResponse format: { timestamp, status, error, message, path, errors, validationErrors }
     let userMessage =
       data?.message || res.statusText || "An unexpected error occurred";
 
@@ -70,14 +70,13 @@ export async function request(endpoint, options = {}) {
       userMessage = "Resource conflict or concurrent modification occurred.";
     } else if (res.status === 404 && !data?.message) {
       userMessage = "The requested resource was not found.";
+    } else if (res.status === 400 && !data?.message) {
+      userMessage = "Invalid request or validation failed.";
     }
 
-    throw new ApiError(
-      res.status,
-      userMessage,
-      data?.validationErrors || null,
-      data,
-    );
+    const fieldErrors = data?.errors || data?.validationErrors || null;
+
+    throw new ApiError(res.status, userMessage, fieldErrors, data);
   }
 
   return data;

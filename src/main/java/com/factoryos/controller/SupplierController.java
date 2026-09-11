@@ -16,10 +16,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/suppliers")
+@Validated
 public class SupplierController {
 
     private final SupplierService supplierService;
@@ -40,7 +44,7 @@ public class SupplierController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<SupplierResponse> getSupplierById(@PathVariable Long id) {
+    public ResponseEntity<SupplierResponse> getSupplierById(@PathVariable @Positive(message = "Supplier ID must be positive") Long id) {
         return ResponseEntity.ok(supplierService.getSupplierById(id));
     }
 
@@ -51,14 +55,14 @@ public class SupplierController {
 
     @PutMapping("/{id}")
     public ResponseEntity<SupplierResponse> updateSupplier(
-            @PathVariable Long id,
+            @PathVariable @Positive(message = "Supplier ID must be positive") Long id,
             @Valid @RequestBody UpdateSupplierRequest request
     ) {
         return ResponseEntity.ok(supplierService.updateSupplier(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deactivateSupplier(@PathVariable Long id) {
+    public ResponseEntity<Void> deactivateSupplier(@PathVariable @Positive(message = "Supplier ID must be positive") Long id) {
         supplierService.deactivateSupplier(id);
         return ResponseEntity.noContent().build();
     }

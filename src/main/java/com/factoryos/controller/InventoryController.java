@@ -16,10 +16,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/inventory")
+@Validated
 public class InventoryController {
 
     private final InventoryService inventoryService;
@@ -49,12 +53,14 @@ public class InventoryController {
     }
 
     @GetMapping("/{productId}")
-    public ResponseEntity<InventoryResponse> getInventoryByProductId(@PathVariable Long productId) {
+    public ResponseEntity<InventoryResponse> getInventoryByProductId(
+            @PathVariable @Positive(message = "Product ID must be positive") Long productId) {
         return ResponseEntity.ok(inventoryService.getInventoryByProductId(productId));
     }
 
     @GetMapping("/{productId}/movements")
-    public ResponseEntity<List<StockMovementResponse>> getStockMovements(@PathVariable Long productId) {
+    public ResponseEntity<List<StockMovementResponse>> getStockMovements(
+            @PathVariable @Positive(message = "Product ID must be positive") Long productId) {
         return ResponseEntity.ok(inventoryService.getStockMovements(productId));
     }
 

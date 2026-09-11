@@ -61,8 +61,21 @@ PostgreSQL Database (factoryos)
 
 ## Features
 
-### Currently Implemented (Phases 1, 2, 3, 3.5 & 4)
+### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5 & 6)
 
+- [x] **Validation & Exception Handling Hardening (Phase 6)**:
+  - Standardized API error envelopes (`ErrorResponse`) featuring UTC timestamp, HTTP status code, error phrase, descriptive message, request path, and structured field-level validation errors (`errors` & `validationErrors`).
+  - Strict input validation using Jakarta Validation annotations on all request DTOs, including nested collection validation on purchase order items (`@Valid @NotEmpty`).
+  - Path variable and query parameter validation via `@Validated` on controllers (`@Positive` IDs, `@NotBlank` order numbers).
+  - Clean base exception hierarchy (`ApplicationException extends RuntimeException`) grouping all custom domain exceptions.
+  - Comprehensive `@RestControllerAdvice` global exception handling:
+    - `400 Bad Request`: Field validation failures, parameter constraint violations, malformed JSON bodies (`HttpMessageNotReadableException`), type conversion mismatches (`MethodArgumentTypeMismatchException`), missing parameters (`MissingServletRequestParameterException`), and business rule violations.
+    - `404 Not Found`: Missing domain resources (`ResourceNotFoundException`, `InventoryNotFoundException`) and unmatched API endpoints (`NoResourceFoundException`, `NoHandlerFoundException`).
+    - `405 Method Not Allowed`: Unsupported HTTP methods (`HttpRequestMethodNotSupportedException`).
+    - `409 Conflict`: Duplicate resources, insufficient stock, invalid PO state transitions, optimistic locking collisions (`ObjectOptimisticLockingFailureException`), and database constraint violations (`DataIntegrityViolationException`).
+    - `500 Internal Server Error`: Catch-all fallback that logs full stack traces server-side while returning generic, sanitized error messages to clients without leaking SQL, table names, or internal class names.
+  - Frontend integration: Centralized error handling in `client.js` extracting field validation errors directly to form inputs and routing general business errors to toast alerts.
+  - Automated test suite expanded to **92 tests** (100% passing), including a dedicated `GlobalExceptionHandlerTest` testing every error translation branch.
 - [x] **Purchase Order Workflow (Phase 5)**:
   - Formal domain state machine: `CREATED -> APPROVED -> RECEIVED`, `CREATED -> CANCELLED`, `APPROVED -> CANCELLED`.
   - Strict terminal state guarantees: orders in `RECEIVED` or `CANCELLED` cannot transition further; invalid transitions are rejected with HTTP 409 Conflict.
@@ -114,13 +127,13 @@ PostgreSQL Database (factoryos)
   - Real-time low-stock detection (`quantityAvailable <= reorderLevel`) queried at the database layer (`GET /api/inventory/low-stock`).
   - Optimistic locking via `@Version` to protect against concurrent update collisions.
   - Restriction of stock movements on inactive products.
-- [x] **Centralized Exception Handling**: Uniform error envelopes (`ErrorResponse`) for 400 (Validation / Rule), 404 (Not Found), 409 (Conflict / Insufficient Stock / Duplicate / Invalid PO State), and 500 (Internal Error).
-- [x] **Automated Testing Suite**: 75 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
+- [x] **Centralized Exception Handling**: Uniform error envelopes (`ErrorResponse`) for 400 (Validation / Rule / Malformed), 404 (Not Found), 405 (Method Not Allowed), 409 (Conflict / Insufficient Stock / Duplicate / Invalid PO State), and 500 (Sanitized Server Error).
+- [x] **Automated Testing Suite**: 92 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), exception handlers, and full context integration testing against PostgreSQL.
 - [x] **Health Check Endpoint**: `GET /api/health` returning operational status.
 
 ### Planned Features (Upcoming Phases)
 
-- [ ] **Supplier Catalog Integration (Phase 6)**: Product-supplier pricing agreements and lead times
+- [ ] **Supplier Catalog Integration (Phase 7)**: Product-supplier pricing agreements and lead times
 - [ ] **Authentication & Authorization**: Role-based access control and security
 
 ---
@@ -568,6 +581,121 @@ The complete end-to-end lifecycle demonstrates how the system maintains accurate
    - Inventory atomically increases: `95 + 20 = 115`.
    - A `STOCK_IN` movement is logged referencing `PO-000003` with reason `"Purchase order received"`.
    - PO status becomes `RECEIVED`. Duplicate receive or cancellation attempts return `409 Conflict`.
+
+---
+
+## Error Handling Architecture & Standards
+
+FactoryOS employs an enterprise-grade validation and exception-handling strategy guaranteeing consistent, predictable error responses across all APIs:
+
+```text
+HTTP Request
+     ↓
+DTO & Path Validation (Jakarta @Valid, @Validated)
+     ↓ [Failure: MethodArgumentNotValidException / ConstraintViolationException]
+Controller Layer
+     ↓
+Service Layer (Business Rules & Domain Invariants)
+     ↓ [Failure: ApplicationException subclass]
+Database / Hibernate Layer
+     ↓ [Failure: DataIntegrityViolationException / OptimisticLockException]
+Centralized Handler (@RestControllerAdvice)
+     ↓
+Consistent JSON ErrorResponse (No Stack Traces, No Internal SQL Leakage)
+```
+
+### HTTP Status Code Mapping
+
+| HTTP Status | Category | Typical Causes |
+| :--- | :--- | :--- |
+| **`400 Bad Request`** | Input / Validation / Malformed | Field validation failure, constraint violation, malformed JSON body, unparseable data types, missing required query parameters, or business rule conflicts. |
+| **`404 Not Found`** | Resource Missing | Nonexistent product, supplier, inventory record, purchase order ID, or unmapped URL path. |
+| **`405 Method Not Allowed`** | Invalid HTTP Method | Using an unsupported HTTP verb (e.g. `PATCH` on a resource that only supports `GET`/`PUT`). |
+| **`409 Conflict`** | State & Integrity Conflict | Duplicate SKU, insufficient available stock on stock-out, illegal purchase order state transitions, duplicate receipt, cancellation of received orders, concurrent modification (optimistic lock), or database unique constraints. |
+| **`500 Internal Server Error`** | Server-Side Exception | Unhandled runtime errors. Logged with full stack traces on the server; client receives a sanitized response with zero internal leakage. |
+
+### Standard JSON Error Envelope
+
+Every error response adheres to the `ErrorResponse` schema:
+
+```json
+{
+  "timestamp": "2026-09-11T16:10:58.696647Z",
+  "status": 400,
+  "error": "Validation Failed",
+  "message": "Input validation failed for one or more fields",
+  "path": "/api/products",
+  "errors": {
+    "name": "Product name cannot be blank",
+    "unitPrice": "Unit price must be greater than or equal to 0"
+  },
+  "validationErrors": {
+    "name": "Product name cannot be blank",
+    "unitPrice": "Unit price must be greater than or equal to 0"
+  }
+}
+```
+
+### Error Response Examples
+
+#### 1. Validation Failure (`400 Bad Request`)
+```json
+{
+  "timestamp": "2026-09-11T16:11:23.134043Z",
+  "status": 400,
+  "error": "Validation Failed",
+  "message": "Input validation failed for one or more fields",
+  "path": "/api/purchase-orders",
+  "errors": {
+    "items[0].quantity": "Quantity must be greater than 0",
+    "items[0].unitPrice": "Unit price must be greater than or equal to 0"
+  }
+}
+```
+
+#### 2. Malformed Request Body (`400 Bad Request`)
+```json
+{
+  "timestamp": "2026-09-11T16:10:39.424452Z",
+  "status": 400,
+  "error": "Malformed Request",
+  "message": "Malformed JSON request body or invalid data type format",
+  "path": "/api/products"
+}
+```
+
+#### 3. Resource Not Found (`404 Not Found`)
+```json
+{
+  "timestamp": "2026-09-11T16:11:06.946156Z",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Product not found with id: 99999",
+  "path": "/api/products/99999"
+}
+```
+
+#### 4. Insufficient Stock Conflict (`409 Conflict`)
+```json
+{
+  "timestamp": "2026-09-11T16:11:14.515347Z",
+  "status": 409,
+  "error": "Insufficient Stock",
+  "message": "Cannot remove 999999 units of PMP-3001. Available stock: 115",
+  "path": "/api/inventory/stock-out"
+}
+```
+
+#### 5. Invalid Purchase Order State Transition (`409 Conflict`)
+```json
+{
+  "timestamp": "2026-09-11T16:11:26.668292Z",
+  "status": 409,
+  "error": "Invalid Purchase Order State",
+  "message": "Cannot receive purchase order PO-000004 because it has been cancelled",
+  "path": "/api/purchase-orders/4/receive"
+}
+```
 
 ---
 

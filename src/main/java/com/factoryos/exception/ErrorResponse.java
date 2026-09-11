@@ -12,14 +12,15 @@ public record ErrorResponse(
         String error,
         String message,
         String path,
+        Map<String, String> errors,
         Map<String, String> validationErrors
 ) {
     public ErrorResponse(int status, String error, String message, String path) {
-        this(Instant.now(), status, error, message, path, null);
+        this(Instant.now(), status, error, message, path, null, null);
     }
 
-    public ErrorResponse(int status, String error, String message, String path, Map<String, String> validationErrors) {
-        this(Instant.now(), status, error, message, path, validationErrors);
+    public ErrorResponse(int status, String error, String message, String path, Map<String, String> errors) {
+        this(Instant.now(), status, error, message, path, errors, errors);
     }
 }
 

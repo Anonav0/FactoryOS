@@ -17,10 +17,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/products")
+@Validated
 public class ProductController {
 
     private final ProductService productService;
@@ -41,7 +45,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
+    public ResponseEntity<ProductResponse> getProductById(@PathVariable @Positive(message = "Product ID must be positive") Long id) {
         return ResponseEntity.ok(productService.getProductById(id));
     }
 
@@ -57,14 +61,14 @@ public class ProductController {
 
     @PutMapping("/{id}")
     public ResponseEntity<ProductResponse> updateProduct(
-            @PathVariable Long id,
+            @PathVariable @Positive(message = "Product ID must be positive") Long id,
             @Valid @RequestBody UpdateProductRequest request
     ) {
         return ResponseEntity.ok(productService.updateProduct(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deactivateProduct(@PathVariable Long id) {
+    public ResponseEntity<Void> deactivateProduct(@PathVariable @Positive(message = "Product ID must be positive") Long id) {
         productService.deactivateProduct(id);
         return ResponseEntity.noContent().build();
     }
