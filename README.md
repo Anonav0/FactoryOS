@@ -61,8 +61,17 @@ PostgreSQL Database (factoryos)
 
 ## Features
 
-### Currently Implemented (Phases 1, 2 & 3)
+### Currently Implemented (Phases 1, 2, 3 & 3.5)
 
+- [x] **Frontend Operations Dashboard (Phase 3.5)**:
+  - Desktop-first, clean industrial operations UI built with React & Vite.
+  - 4 Core Views: Dashboard (KPI cards + Low Stock table), Products, Suppliers, Inventory.
+  - Centralized API layer (`src/api`) consuming Spring Boot REST APIs with CORS support.
+  - Form validation with inline field errors mapped from backend `ErrorResponse`.
+  - Negative-stock prevention with clear 409 conflict alerts.
+  - Interactive modals for Stock-In, Stock-Out, Adjustments, and chronological Movement History.
+  - Soft deactivation flows with explicit confirmation modals.
+  - Auto-dismissing toast notifications and accessible loading/empty states.
 - [x] **Project Foundation**: Java 21 LTS, Spring Boot 3.4.x, Maven Wrapper (`mvnw`), PostgreSQL JDBC.
 - [x] **Product Management**:
   - Full CRUD operations with RESTful conventions.
@@ -427,10 +436,23 @@ export DB_PASSWORD="your_password"
 ./mvnw clean test
 ```
 
-### 3. Start Application
+### 3. Start Backend Application
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-The application starts on port `8080`.
+The Spring Boot backend starts on port `8080` (`http://localhost:8080`).
+
+### 4. Start Frontend Dashboard
+
+In a new terminal window:
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+The Vite development server starts on port `5173` (`http://localhost:5173`).
