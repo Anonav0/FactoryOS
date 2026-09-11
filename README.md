@@ -61,8 +61,21 @@ PostgreSQL Database (factoryos)
 
 ## Features
 
-### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5, 6 & 7)
+### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5, 6, 7 & 8)
 
+- [x] **API Documentation & Demo Data (Phase 8)**:
+  - Full OpenAPI 3.1 & Swagger UI integration via `springdoc-openapi-starter-webmvc-ui` (v2.8.5) accessible at `/swagger-ui/index.html` and `/v3/api-docs`.
+  - Comprehensive API documentation across 5 core domain tags: `Products`, `Suppliers`, `Inventory`, `Purchase Orders`, and `System`.
+  - Rich business behavior explanations: SKU uniqueness, soft deletion, negative stock guards, sequential order numbering, authoritative `BigDecimal` totals, and state machine transitions.
+  - Complete schema models with descriptive field explanations and realistic industrial examples for all request and response DTOs, including standardized `ErrorResponse` models.
+  - Environment-aware demo data seeder (`DevelopmentDataInitializer`) active under `dev`/`demo` profiles:
+    - 8 realistic industrial products with varied categories, pricing, and reorder levels.
+    - 5 realistic suppliers with complete contacts and addresses.
+    - Multi-tier inventory dataset featuring healthy stock, low-stock alerts, and a zero-stock item.
+    - Audit movement trail with realistic `STOCK_IN`, `STOCK_OUT`, and `ADJUSTMENT` entries.
+    - 4 purchase orders representing all 4 workflow states (`CREATED`, `APPROVED`, `RECEIVED`, `CANCELLED`).
+  - Production safety & idempotency: checks for existing data prior to seeding to prevent duplicate records across multiple restarts; never runs in production.
+  - Test suite expanded to **109 tests** (100% passing) and **85% overall instruction coverage**.
 - [x] **Testing & Business Logic Verification (Phase 7)**:
   - Robust automated testing pyramid with **103 tests** across Service Unit Tests (Mockito), Controller Slice Tests (`@WebMvcTest`), and Spring Boot Integration Tests (`@SpringBootTest` with live PostgreSQL).
   - Business behavior focus: stock depletion boundaries, zero/positive inventory adjustments, inactive product guards, low-stock reorder thresholds, sequential PO numbering, multi-item line totals, and full state machine transitions.
@@ -712,43 +725,49 @@ Every error response adheres to the `ErrorResponse` schema:
 
 ## Automated Test Suite & Business Rules Matrix
 
-FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrity across all architectural layers. The automated suite contains **103 automated tests** running in ~18 seconds with 0 failures and 0 errors.
+FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrity across all architectural layers. The automated suite contains **109 automated tests** running in ~24 seconds with 0 failures and 0 errors.
 
-| Test Layer       | Test Class                              | Business Rule Tested                                                                   | Assertion Type                       | Sample Test Name                                                                   |
-| :--------------- | :-------------------------------------- | :------------------------------------------------------------------------------------- | :----------------------------------- | :--------------------------------------------------------------------------------- |
-| **Service Unit** | `InventoryServiceTest`                  | Negative stock prevention (`Stock-Out`)                                                | Exception + State Verification       | `stockOut_insufficientStock_throwsExceptionAndDoesNotSave`                         |
-| **Service Unit** | `InventoryServiceTest`                  | Inactive product inventory rejection                                                   | Exception Verification               | `stockIn_inactiveProduct_throwsBusinessRuleException`                              |
-| **Service Unit** | `InventoryServiceTest`                  | Low stock reorder threshold boundaries                                                 | Boolean Assertion                    | `getLowStockItems_atReorderLevel_marksLowStockTrue`                                |
-| **Service Unit** | `InventoryServiceTest`                  | Zero/negative quantity adjustment                                                      | Exception Verification               | `adjustStock_zeroOrNegativeQuantity_throwsIllegalArgumentException`                |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Strict status transitions (`CREATED -> APPROVED -> RECEIVED`)                          | Enum & State Verification            | `approvePurchaseOrder_validState_updatesStatus`                                    |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Terminal state immutability (`RECEIVED`/`CANCELLED`)                                   | Exception Verification               | `receivePurchaseOrder_alreadyReceived_throwsInvalidStateException`                 |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Purchase order atomic receipt & movement creation                                      | Repository Argument Captor           | `receivePurchaseOrder_approvedOrder_incrementsInventoryAndCreatesMovement`         |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Sequential order number generation (`PO-000001`)                                       | String Format Assertion              | `createPurchaseOrder_generatesSequentialOrderNumber`                               |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Duplicate line-item product rejection                                                  | Exception Verification               | `createPurchaseOrder_duplicateProductInItems_throwsException`                      |
-| **Service Unit** | `ProductServiceTest`                    | SKU uniqueness validation                                                              | Exception Verification               | `createProduct_duplicateSku_throwsDuplicateResourceException`                      |
-| **Service Unit** | `SupplierServiceTest`                   | Supplier email uniqueness                                                              | Exception Verification               | `createSupplier_duplicateEmail_throwsDuplicateResourceException`                   |
-| **WebMvc Slice** | `InventoryControllerTest`               | Request body validation (`quantity > 0`, `@NotNull`)                                   | HTTP 400 + JSON Error Fields         | `stockIn_zeroQuantity_returnsBadRequest`                                           |
-| **WebMvc Slice** | `PurchaseOrderControllerTest`           | Nested collection item validation (`items[0].quantity <= 0`)                           | HTTP 400 + Nested JSON Paths         | `createPurchaseOrder_invalidItemQuantityAndPrice_returnsBadRequestWithFieldErrors` |
-| **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Domain exception to HTTP code translations                                             | HTTP Status + ErrorResponse Envelope | `handleInsufficientStockException_returnsConflictResponse`                         |
-| **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Internal server error sanitization (no SQL leaks)                                      | Generic Error Message Assertion      | `handleGenericException_returnsInternalServerErrorResponse`                        |
-| **Integration**  | `PurchaseOrderReceivingIntegrationTest` | End-to-end receipt updates inventory, movements, and PO status                         | Database State Assertions            | `receivePurchaseOrder_successful_updatesInventoryAndMovementsAndStatus`            |
-| **Integration**  | `PurchaseOrderReceivingIntegrationTest` | **Atomic rollback proof**: fails midway, rolls back all previous stock & audit records | Strict Database Pre/Post Assertions  | `receivePurchaseOrder_whenItemFails_rollsBackEntireTransactionAtomically`          |
-| **Integration**  | `InventoryIntegrationTest`              | Database-level unique SKU constraint enforcement                                       | `DataIntegrityViolationException`    | `duplicateSku_violatesDatabaseUniqueConstraint`                                    |
-| **Integration**  | `InventoryIntegrationTest`              | Real database stock lifecycle (stock-in, stock-out, boundary checks)                   | Direct Database Queries              | `inventoryLifecycle_stockInStockOutAndNegativeStockRejection`                      |
+| Test Layer | Test Class | Business Rule Tested | Assertion Type | Sample Test Name |
+| :--- | :--- | :--- | :--- | :--- |
+| **Service Unit** | `InventoryServiceTest` | Negative stock prevention (`Stock-Out`) | Exception + State Verification | `stockOut_insufficientStock_throwsExceptionAndDoesNotSave` |
+| **Service Unit** | `InventoryServiceTest` | Inactive product inventory rejection | Exception Verification | `stockIn_inactiveProduct_throwsBusinessRuleException` |
+| **Service Unit** | `InventoryServiceTest` | Low stock reorder threshold boundaries | Boolean Assertion | `getLowStockItems_atReorderLevel_marksLowStockTrue` |
+| **Service Unit** | `InventoryServiceTest` | Zero/negative quantity adjustment | Exception Verification | `adjustStock_zeroOrNegativeQuantity_throwsIllegalArgumentException` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Strict status transitions (`CREATED -> APPROVED -> RECEIVED`) | Enum & State Verification | `approvePurchaseOrder_validState_updatesStatus` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Terminal state immutability (`RECEIVED`/`CANCELLED`) | Exception Verification | `receivePurchaseOrder_alreadyReceived_throwsInvalidStateException` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Purchase order atomic receipt & movement creation | Repository Argument Captor | `receivePurchaseOrder_approvedOrder_incrementsInventoryAndCreatesMovement` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Sequential order number generation (`PO-000001`) | String Format Assertion | `createPurchaseOrder_generatesSequentialOrderNumber` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Duplicate line-item product rejection | Exception Verification | `createPurchaseOrder_duplicateProductInItems_throwsException` |
+| **Service Unit** | `ProductServiceTest` | SKU uniqueness validation | Exception Verification | `createProduct_duplicateSku_throwsDuplicateResourceException` |
+| **Service Unit** | `SupplierServiceTest` | Supplier email uniqueness | Exception Verification | `createSupplier_duplicateEmail_throwsDuplicateResourceException` |
+| **WebMvc Slice** | `InventoryControllerTest` | Request body validation (`quantity > 0`, `@NotNull`) | HTTP 400 + JSON Error Fields | `stockIn_zeroQuantity_returnsBadRequest` |
+| **WebMvc Slice** | `PurchaseOrderControllerTest` | Nested collection item validation (`items[0].quantity <= 0`) | HTTP 400 + Nested JSON Paths | `createPurchaseOrder_invalidItemQuantityAndPrice_returnsBadRequestWithFieldErrors` |
+| **WebMvc Slice** | `GlobalExceptionHandlerTest` | Domain exception to HTTP code translations | HTTP Status + ErrorResponse Envelope | `handleInsufficientStockException_returnsConflictResponse` |
+| **WebMvc Slice** | `GlobalExceptionHandlerTest` | Internal server error sanitization (no SQL leaks) | Generic Error Message Assertion | `handleGenericException_returnsInternalServerErrorResponse` |
+| **WebMvc Slice** | `OpenApiConfigTest` | OpenAPI specification generation (`/v3/api-docs`) | JSON Spec Metadata Assertions | `apiDocsEndpointReturnsMetadata` |
+| **WebMvc Slice** | `OpenApiConfigTest` | Swagger UI endpoint accessibility | HTTP 3xx Redirection | `swaggerUiEndpointIsAccessible` |
+| **Integration** | `DevelopmentDataInitializerTest` | Realistic multi-tier demo data initialization | Repository Count Assertions | `seedsProductsAndSuppliers` |
+| **Integration** | `DevelopmentDataInitializerTest` | Seed idempotency (no duplicate records on restarts) | Idempotent Run State Assertions | `seedingIsIdempotent` |
+| **Integration** | `PurchaseOrderReceivingIntegrationTest` | End-to-end receipt updates inventory, movements, and PO status | Database State Assertions | `receivePurchaseOrder_successful_updatesInventoryAndMovementsAndStatus` |
+| **Integration** | `PurchaseOrderReceivingIntegrationTest` | **Atomic rollback proof**: fails midway, rolls back all previous stock & audit records | Strict Database Pre/Post Assertions | `receivePurchaseOrder_whenItemFails_rollsBackEntireTransactionAtomically` |
+| **Integration** | `InventoryIntegrationTest` | Database-level unique SKU constraint enforcement | `DataIntegrityViolationException` | `duplicateSku_violatesDatabaseUniqueConstraint` |
+| **Integration** | `InventoryIntegrationTest` | Real database stock lifecycle (stock-in, stock-out, boundary checks) | Direct Database Queries | `inventoryLifecycle_stockInStockOutAndNegativeStockRejection` |
 
 ### Code Coverage (JaCoCo)
 
 FactoryOS utilizes `jacoco-maven-plugin` (0.8.12) to verify test execution depth.
 
-| Package                    | Instruction Coverage    | Branch Coverage | Classes Analyzed |
-| :------------------------- | :---------------------- | :-------------- | :--------------- |
-| `com.factoryos.controller` | **89%**                 | N/A             | 5                |
-| `com.factoryos.service`    | **87%**                 | **66%**         | 3                |
-| `com.factoryos.exception`  | **84%**                 | **55%**         | 10               |
-| `com.factoryos.dto`        | **100%**                | N/A             | 18               |
-| `com.factoryos.config`     | **100%**                | N/A             | 1                |
-| `com.factoryos.entity`     | **79%**                 | **50%**         | 7                |
-| **Total Project**          | **83%** (2,650 / 3,190) | **56%**         | **51**           |
+| Package | Instruction Coverage | Branch Coverage | Classes Analyzed |
+| :--- | :--- | :--- | :--- |
+| `com.factoryos.config` | **100%** | **90%** | 3 |
+| `com.factoryos.dto` | **100%** | N/A | 18 |
+| `com.factoryos.controller` | **89%** | N/A | 5 |
+| `com.factoryos.service` | **87%** | **66%** | 3 |
+| `com.factoryos.exception` | **84%** | **55%** | 10 |
+| `com.factoryos.entity` | **79%** | **50%** | 7 |
+| `com.factoryos.service.impl` | **72%** | **71%** | 1 |
+| `com.factoryos.mapper` | **74%** | **42%** | 5 |
+| **Total Project** | **85%** (3,262 / 3,802) | **57%** | **53** |
 
 To generate the HTML coverage report locally:
 
@@ -799,6 +818,119 @@ You cannot prove `@Transactional` rollback using unit tests with mocks, because 
    - Verify that the service method threw the expected exception.
    - Query the database directly via repositories: - Verify Product 1's inventory quantity remains at its original value (e.g., exactly 100, not 150). - Verify Product 2's inventory quantity remains untouched. - Verify `stockMovementRepository.count()` is `0` (the movement created for Item 1 was completely rolled back). - Verify the purchase order status remains `APPROVED`, not `RECEIVED`.
      This conclusively proves that the transaction boundary preserved the ACID atomicity guarantee: all mutations succeeded together or all were reverted.
+
+---
+
+## Interactive Swagger & OpenAPI Documentation
+
+FactoryOS integrates OpenAPI 3.1 and Swagger UI using `springdoc-openapi-starter-webmvc-ui` (v2.8.5). When the backend application is running, developers, interviewers, and API evaluators can access the interactive documentation directly in their browser:
+
+- **Swagger UI**: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+- **OpenAPI 3.1 JSON Specification**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+
+### API Groups & Domain Organization
+
+The REST endpoints are organized into 5 logical business tags:
+
+1. **Products (`/api/products`)**:
+   - Product catalog registration, SKU uniqueness guarantees, pricing updates, and soft deactivation.
+2. **Suppliers (`/api/suppliers`)**:
+   - Supplier directory management, unique email validation, and active status tracking.
+3. **Inventory (`/api/inventory`)**:
+   - Real-time stock queries, atomic stock-in/stock-out operations, non-negative stock enforcement, audit adjustments, and low-stock alerts.
+4. **Purchase Orders (`/api/purchase-orders`)**:
+   - Procurement order creation, line items snapshotting, sequential order number generation (`PO-000001`), authoritative financial totals, and lifecycle state transitions (`CREATED -> APPROVED -> RECEIVED / CANCELLED`).
+5. **System (`/api/health`)**:
+   - Health check and service readiness verification.
+
+### Business Rules Embedded in Documentation
+
+The OpenAPI contract details both technical specifications and domain rules:
+- **Negative Stock Prevention**: Documents that `POST /api/inventory/stock-out` enforces `quantityAvailable >= quantity` and returns `409 Conflict` (`InsufficientStockException`) if stock would drop below zero.
+- **Transactional Goods Receipt**: Documents that `POST /api/purchase-orders/{id}/receive` executes in an atomic `@Transactional` boundary, incrementing stock for each line item, logging `STOCK_IN` movements, and setting status to `RECEIVED` with complete rollback protection if any item fails.
+- **Purchase Order State Machine**: Documents allowed transitions (`CREATED -> APPROVED`, `APPROVED -> RECEIVED`, `CREATED/APPROVED -> CANCELLED`) and terminal state immutability.
+- **Error Envelopes**: Documents `400 Bad Request`, `404 Not Found`, `409 Conflict`, and `500 Internal Server Error` using the standardized `ErrorResponse` schema.
+
+---
+
+## Development Demo Data & Seeding Strategy
+
+FactoryOS includes an environment-aware, idempotent development data seeder (`DevelopmentDataInitializer`) designed to make the application immediately demonstrable on startup without manual data entry.
+
+### Activation & Profile Isolation
+
+The demo data seeder is bound to the `dev` and `demo` Spring profiles (`@Profile({"dev", "demo"})`):
+- In development mode (configured as default via `spring.profiles.default=dev`), demo data is automatically populated on first run.
+- Production environments (`SPRING_PROFILES_ACTIVE=prod`) never activate this component, guaranteeing zero accidental test records in production.
+
+### Seed Dataset Overview
+
+1. **8 Realistic Industrial Products**:
+   - `MOTOR-001` (Industrial Electric Motor, ₹18,500.00, reorder level 10)
+   - `BEARING-001` (Heavy Duty Ball Bearing, ₹450.00, reorder level 25)
+   - `BELT-001` (Reinforced Conveyor Belt, ₹1,200.00, reorder level 15)
+   - `GEAR-001` (Steel Gear Assembly, ₹3,400.00, reorder level 8)
+   - `PUMP-001` (Hydraulic Gear Pump, ₹8,200.00, reorder level 5)
+   - `VALVE-001` (Industrial Control Valve, ₹2,650.00, reorder level 12)
+   - `SENSOR-001` (RTD Temperature Sensor, ₹950.00, reorder level 20)
+   - `FILTER-001` (High-Pressure Hydraulic Filter, ₹380.00, reorder level 30)
+
+2. **5 Realistic Suppliers**:
+   - `ABC Industrial Supplies` (Kolkata, West Bengal)
+   - `Eastern Engineering Components` (Howrah, West Bengal)
+   - `Metro Machine Parts` (Jamshedpur, Jharkhand)
+   - `National Hydraulic Systems` (Pune, Maharashtra)
+   - `Precision Automation Ltd.` (Bengaluru, Karnataka)
+
+3. **Multi-Tier Inventory Distribution**:
+   - **Healthy Stock**: `MOTOR-001` (45 available), `BEARING-001` (120 available), `BELT-001` (35 available), `SENSOR-001` (25 available), `FILTER-001` (50 available).
+   - **Low Stock (Triggering Alerts)**: `PUMP-001` (3 available vs reorder 5), `VALVE-001` (8 available vs reorder 12).
+   - **Zero Stock**: `GEAR-001` (0 available vs reorder 8).
+
+4. **Realistic Audit Trail**:
+   - Seeded `STOCK_IN`, `STOCK_OUT`, and `ADJUSTMENT` movement records reflecting initial deliveries, production usage, and cycle count reconciliations.
+
+5. **4 Purchase Orders Across All Lifecycle States**:
+   - `PO-000001` (`CREATED`): Draft order from ABC Industrial Supplies (Motors + Gears), ready for approval.
+   - `PO-000002` (`APPROVED`): Authorized order from Eastern Engineering Components (Bearings + Belts), ready for goods receipt.
+   - `PO-000003` (`RECEIVED`): Fully received historical procurement order from Metro Machine Parts (Filters + Sensors).
+   - `PO-000004` (`CANCELLED`): Terminated order from Precision Automation Ltd. (Valves).
+
+### Idempotency Guarantee
+
+The initializer executes an idempotency check (`productRepository.existsBySku("MOTOR-001")`) before executing any database operations. If demo data already exists from a previous run, seeding is immediately skipped. The application can restart hundreds of times without creating duplicate records or causing constraint errors.
+
+---
+
+## End-to-End Demonstration Workflow
+
+Follow this 5-minute walkthrough to demonstrate FactoryOS capabilities:
+
+```text
+1. Start Backend & Open Swagger UI
+   └─ Run: ./mvnw spring-boot:run
+   └─ Navigate to: http://localhost:8080/swagger-ui/index.html
+
+2. Explore Low Stock Alerts
+   └─ Execute: GET /api/inventory/low-stock
+   └─ Observe: PUMP-001, VALVE-001, and GEAR-001 returned with lowStock = true.
+
+3. Inspect Pre-seeded Purchase Orders
+   └─ Execute: GET /api/purchase-orders
+   └─ Observe: POs in CREATED, APPROVED, RECEIVED, and CANCELLED states.
+
+4. Walk Through the Complete Procurement Lifecycle:
+   a. Look up PO-000001 (Status: CREATED) via GET /api/purchase-orders/order-number/PO-000001
+   b. Approve the order via POST /api/purchase-orders/{id}/approve
+      └─ Status updates from CREATED to APPROVED
+   c. Receive goods via POST /api/purchase-orders/{id}/receive
+      └─ Status updates to RECEIVED
+      └─ Inventory for MOTOR-001 increases (45 -> 50)
+      └─ Inventory for GEAR-001 increases (0 -> 8, clearing zero stock)
+      └─ STOCK_IN movement records are generated atomically
+   d. Query GET /api/inventory/low-stock
+      └─ GEAR-001 is now restocked and cleared from zero-stock condition!
+```
 
 ---
 
