@@ -14,12 +14,27 @@ FactoryOS follows a classic, clean **Layered Architecture** ensuring separation 
 Client (Web / Mobile / Third-Party API)
    ↓ HTTP / JSON Requests
 REST Controller Layer
+   ├── ProductController (/api/products)
+   ├── SupplierController (/api/suppliers)
+   ├── InventoryController (/api/inventory)
+   └── HealthController (/api/health)
    ↓ DTOs / Method Invocations
-Service Layer (Business Logic, SKU Uniqueness & Transactions)
+Service Layer (Business Logic, SKU Uniqueness, Transactions, Concurrency)
+   ├── ProductService
+   ├── SupplierService
+   └── InventoryService
    ↓ Domain Entities
 Repository Layer (Spring Data JPA / Hibernate)
+   ├── ProductRepository
+   ├── SupplierRepository
+   ├── InventoryRepository
+   └── StockMovementRepository
    ↓ SQL Queries via JDBC Driver
 PostgreSQL Database (factoryos)
+   ├── products
+   ├── suppliers
+   ├── inventory
+   └── stock_movements
 ```
 
 ### Layer Responsibilities
@@ -30,23 +45,23 @@ PostgreSQL Database (factoryos)
    - Enforces Jakarta Bean Validation (`@Valid`) on incoming requests.
    - Converts service outputs into HTTP responses (`ResponseEntity`).
 3. **Service Layer (`com.factoryos.service`)**:
-   - Encapsulates all domain and business rules (e.g. SKU normalization and uniqueness checking, soft deletion).
-   - Manages transactional boundaries (`@Transactional` and `@Transactional(readOnly = true)`).
+   - Encapsulates domain logic (SKU uniqueness, negative-stock prevention, stock adjustments, low-stock evaluation).
+   - Coordinates multi-entity workflows and manages transactional boundaries (`@Transactional` and `@Transactional(readOnly = true)`).
 4. **Repository Layer (`com.factoryos.repository`)**:
-   - Provides data access abstractions using Spring Data JPA interfaces.
-   - Executes database operations via Hibernate ORM.
+   - Provides data access abstractions using Spring Data JPA.
+   - Performs database-side optimizations (e.g. low-stock JPQL filtering).
 5. **PostgreSQL Database**:
-   - Relational database responsible for durable persistence and table-level constraints (e.g. unique constraint on `sku`).
+   - Durable relational persistence, foreign key cascades, unique constraints, and check constraints.
 6. **Data Transfer Objects (`com.factoryos.dto`)**:
-   - Decouples external API representations from internal JPA entities, preventing accidental exposure of internal entity state and guarding against mass-assignment vulnerabilities.
+   - Decouples external API representations from internal JPA entities, guarding against mass-assignment and circular reference issues.
 7. **Exception Handling (`com.factoryos.exception`)**:
-   - Centralized `@RestControllerAdvice` mapping domain exceptions to uniform error envelopes (`ErrorResponse`).
+   - Centralized `@RestControllerAdvice` mapping domain exceptions (`InsufficientStockException`, `ResourceNotFoundException`, `DuplicateResourceException`) to uniform error envelopes (`ErrorResponse`).
 
 ---
 
 ## Features
 
-### Currently Implemented (Phase 1 & Phase 2)
+### Currently Implemented (Phases 1, 2 & 3)
 
 - [x] **Project Foundation**: Java 21 LTS, Spring Boot 3.4.x, Maven Wrapper (`mvnw`), PostgreSQL JDBC.
 - [x] **Product Management**:
@@ -62,34 +77,42 @@ PostgreSQL Database (factoryos)
   - Email format validation.
   - Soft deletion / deactivation (`active = false`, HTTP 204 No Content).
   - Active-only supplier filtering (`GET /api/suppliers/active`).
-- [x] **Centralized Exception Handling**: Standardized error responses (`ErrorResponse`) for 400 (Validation), 404 (Not Found), 409 (Conflict), and 500 (Internal Error).
-- [x] **Automated Testing Suite**: 30 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
+- [x] **Inventory Management**:
+  - 1:1 relationship between Product and Inventory.
+  - Automatic inventory record initialization on product creation (`quantity = 0, reserved = 0`).
+  - Stock-in operations (`POST /api/inventory/stock-in`).
+  - Stock-out operations with negative-stock prevention (`POST /api/inventory/stock-out`).
+  - Stock adjustments to physical count (`POST /api/inventory/adjust`).
+  - Complete, immutable audit log via `StockMovement` records (`STOCK_IN`, `STOCK_OUT`, `ADJUSTMENT`).
+  - Real-time low-stock detection (`quantityAvailable <= reorderLevel`) queried at the database layer (`GET /api/inventory/low-stock`).
+  - Optimistic locking via `@Version` to protect against concurrent update collisions.
+  - Restriction of stock movements on inactive products.
+- [x] **Centralized Exception Handling**: Uniform error envelopes (`ErrorResponse`) for 400 (Validation / Rule), 404 (Not Found), 409 (Conflict / Insufficient Stock / Duplicate), and 500 (Internal Error).
+- [x] **Automated Testing Suite**: 49 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
 - [x] **Health Check Endpoint**: `GET /api/health` returning operational status.
 
 ### Planned Features (Upcoming Phases)
 
-- [ ] **Inventory Tracking**: Real-time stock levels, available vs. reserved quantities
-- [ ] **Stock Movements**: Auditable transaction logs (`STOCK_IN`, `STOCK_OUT`, `ADJUSTMENT`)
 - [ ] **Purchase Orders**: Procurement workflows from draft to receiving and inventory updates
-- [ ] **Low-Stock Detection**: Automated detection of inventory falling below defined reorder thresholds
+- [ ] **Supplier Catalog Integration**: Product-supplier pricing and lead times
 - [ ] **Authentication & Authorization**: Role-based access control and security
 
 ---
 
 ## Tech Stack
 
-| Technology                  | Purpose                                                                            |
-| :-------------------------- | :--------------------------------------------------------------------------------- |
-| **Java 21**                 | Modern LTS Java runtime (records, pattern matching)                                |
-| **Spring Boot 3.4.x**       | Enterprise application framework                                                   |
-| **Spring Web**              | RESTful web services and MVC architecture                                          |
-| **Spring Data JPA**         | Repository abstraction and database access                                         |
-| **Hibernate 6.x**           | Object-Relational Mapping (ORM) and schema management                              |
-| **PostgreSQL 16**           | Relational SQL database engine                                                     |
-| **Jakarta Bean Validation** | Declarative data validation annotations (`@NotBlank`, `@PositiveOrZero`, `@Email`) |
-| **Lombok**                  | Boilerplate reduction for entities                                                 |
-| **Maven**                   | Dependency management and build automation                                         |
-| **JUnit 5 & Mockito**       | Automated unit and integration testing                                             |
+| Technology                  | Purpose                                                                     |
+| :-------------------------- | :-------------------------------------------------------------------------- |
+| **Java 21**                 | Modern LTS Java runtime (records, pattern matching)                         |
+| **Spring Boot 3.4.x**       | Enterprise application framework                                            |
+| **Spring Web**              | RESTful web services and MVC architecture                                   |
+| **Spring Data JPA**         | Repository abstraction and database access                                  |
+| **Hibernate 6.x**           | Object-Relational Mapping (ORM) and schema management                       |
+| **PostgreSQL 16**           | Relational SQL database engine                                              |
+| **Jakarta Bean Validation** | Declarative data validation annotations (`@NotNull`, `@Positive`, `@Email`) |
+| **Lombok**                  | Boilerplate reduction for entities                                          |
+| **Maven**                   | Dependency management and build automation                                  |
+| **JUnit 5 & Mockito**       | Automated unit and integration testing                                      |
 
 ---
 
@@ -102,6 +125,7 @@ FactoryOS
 │   └── walkthroughs/                   # Phase walkthroughs and installation guides
 │       ├── phase-1-walkthrough.md
 │       ├── phase-2-walkthrough.md
+│       ├── phase-3-walkthrough.md
 │       └── installation-and-guide.md
 ├── .mvn/wrapper/                       # Maven wrapper binaries and configuration
 ├── src/
@@ -110,7 +134,8 @@ FactoryOS
 │   │   │   ├── controller/             # REST Controllers
 │   │   │   │   ├── HealthController.java
 │   │   │   │   ├── ProductController.java
-│   │   │   │   └── SupplierController.java
+│   │   │   │   ├── SupplierController.java
+│   │   │   │   └── InventoryController.java
 │   │   │   ├── dto/                    # Data Transfer Objects (Java Records)
 │   │   │   │   ├── CreateProductRequest.java
 │   │   │   │   ├── UpdateProductRequest.java
@@ -118,27 +143,42 @@ FactoryOS
 │   │   │   │   ├── CreateSupplierRequest.java
 │   │   │   │   ├── UpdateSupplierRequest.java
 │   │   │   │   ├── SupplierResponse.java
+│   │   │   │   ├── StockInRequest.java
+│   │   │   │   ├── StockOutRequest.java
+│   │   │   │   ├── StockAdjustmentRequest.java
+│   │   │   │   ├── InventoryResponse.java
+│   │   │   │   ├── StockMovementResponse.java
+│   │   │   │   ├── LowStockResponse.java
 │   │   │   │   └── HealthResponse.java
 │   │   │   ├── entity/                 # JPA Entities
 │   │   │   │   ├── Product.java
-│   │   │   │   └── Supplier.java
+│   │   │   │   ├── Supplier.java
+│   │   │   │   ├── Inventory.java
+│   │   │   │   ├── StockMovement.java
+│   │   │   │   └── StockMovementType.java
 │   │   │   ├── exception/              # Exceptions & Global Exception Handler
 │   │   │   │   ├── ResourceNotFoundException.java
 │   │   │   │   ├── DuplicateResourceException.java
 │   │   │   │   ├── BusinessRuleException.java
+│   │   │   │   ├── InsufficientStockException.java
+│   │   │   │   ├── InventoryNotFoundException.java
+│   │   │   │   ├── InvalidStockAdjustmentException.java
 │   │   │   │   ├── ErrorResponse.java
 │   │   │   │   └── GlobalExceptionHandler.java
 │   │   │   ├── mapper/                 # Entity-DTO Mappers
 │   │   │   │   ├── ProductMapper.java
-│   │   │   │   └── SupplierMapper.java
+│   │   │   │   ├── SupplierMapper.java
+│   │   │   │   ├── InventoryMapper.java
+│   │   │   │   └── StockMovementMapper.java
 │   │   │   ├── repository/             # Spring Data JPA Repositories
 │   │   │   │   ├── ProductRepository.java
-│   │   │   │   └── SupplierRepository.java
+│   │   │   │   ├── SupplierRepository.java
+│   │   │   │   ├── InventoryRepository.java
+│   │   │   │   └── StockMovementRepository.java
 │   │   │   ├── service/                # Business Logic Services
-│   │   │   │   ├── ProductService.java
-│   │   │   │   ├── ProductServiceImpl.java
-│   │   │   │   ├── SupplierService.java
-│   │   │   │   └── SupplierServiceImpl.java
+│   │   │   │   ├── ProductService.java & ProductServiceImpl.java
+│   │   │   │   ├── SupplierService.java & SupplierServiceImpl.java
+│   │   │   │   └── InventoryService.java & InventoryServiceImpl.java
 │   │   │   └── FactoryOsApplication.java # Main Application Class
 │   │   └── resources/
 │   │       └── application.properties  # Application & Database properties
@@ -147,10 +187,12 @@ FactoryOS
 │           ├── controller/             # WebMvc MockMvc Tests
 │           │   ├── HealthControllerTest.java
 │           │   ├── ProductControllerTest.java
-│           │   └── SupplierControllerTest.java
+│           │   ├── SupplierControllerTest.java
+│           │   └── InventoryControllerTest.java
 │           ├── service/                # Service Layer Mockito Unit Tests
 │           │   ├── ProductServiceTest.java
-│           │   └── SupplierServiceTest.java
+│           │   ├── SupplierServiceTest.java
+│           │   └── InventoryServiceTest.java
 │           └── FactoryOsApplicationTests.java # Context Load & Integration Test
 ├── .env.example                        # Template for environment variables
 ├── .gitignore                          # Git exclusions
@@ -164,136 +206,206 @@ FactoryOS
 
 ## REST API Reference & Examples
 
-### Products
+### Inventory Management
 
-#### 1. Create Product
+#### 1. Stock In
 
 - **Method**: `POST`
-- **Path**: `/api/products`
+- **Path**: `/api/inventory/stock-in`
 - **Request Body**:
 
 ```json
 {
-  "sku": "BRG-6204",
-  "name": "Steel Bearing 6204",
-  "description": "Industrial deep-groove bearing",
-  "category": "Bearings",
-  "unitPrice": 450.0,
-  "reorderLevel": 20
+  "productId": 1,
+  "quantity": 100,
+  "reference": "GRN-1001",
+  "reason": "Initial stock batch"
 }
 ```
 
-- **Response (`201 Created`)**:
+- **Response (`200 OK`)**:
 
 ```json
 {
   "id": 1,
+  "productId": 1,
   "sku": "BRG-6204",
-  "name": "Steel Bearing 6204",
-  "description": "Industrial deep-groove bearing",
-  "category": "Bearings",
-  "unitPrice": 450.0,
-  "reorderLevel": 20,
-  "active": true,
-  "createdAt": "2026-09-11T08:28:05.501742Z",
-  "updatedAt": "2026-09-11T08:28:05.501742Z"
+  "productName": "Steel Bearing 6204",
+  "quantityAvailable": 100,
+  "reservedQuantity": 0,
+  "lowStock": false,
+  "lastUpdated": "2026-09-11T08:43:58.928236Z"
 }
 ```
 
-#### 2. Duplicate SKU Conflict
+#### 2. Stock Out
 
 - **Method**: `POST`
-- **Path**: `/api/products` with existing SKU
+- **Path**: `/api/inventory/stock-out`
+- **Request Body**:
+
+```json
+{
+  "productId": 1,
+  "quantity": 85,
+  "reference": "PROD-REQ-501",
+  "reason": "Assembly line consumption"
+}
+```
+
+- **Response (`200 OK`)**:
+
+```json
+{
+  "id": 1,
+  "productId": 1,
+  "sku": "BRG-6204",
+  "productName": "Steel Bearing 6204",
+  "quantityAvailable": 15,
+  "reservedQuantity": 0,
+  "lowStock": true,
+  "lastUpdated": "2026-09-11T08:43:58.978503Z"
+}
+```
+
+#### 3. Stock Out with Insufficient Stock (Negative-Stock Prevention)
+
+- **Method**: `POST`
+- **Path**: `/api/inventory/stock-out`
+- **Request Body**:
+
+```json
+{
+  "productId": 1,
+  "quantity": 20,
+  "reference": "PROD-REQ-502",
+  "reason": "Overconsumption attempt"
+}
+```
+
 - **Response (`409 Conflict`)**:
 
 ```json
 {
-  "timestamp": "2026-09-11T08:28:05.615788Z",
+  "timestamp": "2026-09-11T08:43:59.026121Z",
   "status": 409,
-  "error": "Conflict",
-  "message": "Product with SKU 'BRG-6204' already exists",
-  "path": "/api/products"
+  "error": "Insufficient Stock",
+  "message": "Cannot remove 20 units of BRG-6204. Available stock: 15",
+  "path": "/api/inventory/stock-out"
 }
 ```
 
-#### 3. Update Product (SKU is Immutable)
-
-- **Method**: `PUT`
-- **Path**: `/api/products/{id}`
-- **Request Body**:
-
-```json
-{
-  "name": "Steel Bearing 6204 Heavy Duty",
-  "description": "Upgraded heavy duty bearing",
-  "category": "Bearings",
-  "unitPrice": 495.0,
-  "reorderLevel": 25,
-  "active": true
-}
-```
-
-- **Response (`200 OK`)**: Updated product record with SKU preserved.
-
-#### 4. Deactivate Product (Soft Delete)
-
-- **Method**: `DELETE`
-- **Path**: `/api/products/{id}`
-- **Response (`204 No Content`)**: Empty body. Record remains in database with `active = false`.
-
-#### 5. Search Products by Name
-
-- **Method**: `GET`
-- **Path**: `/api/products/search?name=bearing`
-- **Response (`200 OK`)**: List of matching products.
-
----
-
-### Suppliers
-
-#### 1. Create Supplier
+#### 4. Stock Adjustment
 
 - **Method**: `POST`
-- **Path**: `/api/suppliers`
+- **Path**: `/api/inventory/adjust`
 - **Request Body**:
 
 ```json
 {
-  "name": "ABC Industrial Supplies",
-  "contactPerson": "Rahul Sen",
-  "email": "contact@abcindustrial.example",
-  "phone": "+91-9876543210",
-  "address": "Industrial Area, Kolkata"
+  "productId": 1,
+  "newQuantity": 95,
+  "reference": "AUDIT-SEPT-2026",
+  "reason": "Physical cycle count"
 }
 ```
 
-- **Response (`201 Created`)**:
+- **Response (`200 OK`)**:
 
 ```json
 {
   "id": 1,
-  "name": "ABC Industrial Supplies",
-  "contactPerson": "Rahul Sen",
-  "email": "contact@abcindustrial.example",
-  "phone": "+91-9876543210",
-  "address": "Industrial Area, Kolkata",
-  "active": true,
-  "createdAt": "2026-09-11T08:28:05.782812Z",
-  "updatedAt": "2026-09-11T08:28:05.782812Z"
+  "productId": 1,
+  "sku": "BRG-6204",
+  "productName": "Steel Bearing 6204",
+  "quantityAvailable": 95,
+  "reservedQuantity": 0,
+  "lowStock": false,
+  "lastUpdated": "2026-09-11T08:43:59.000644Z"
 }
 ```
 
-#### 2. Deactivate Supplier (Soft Delete)
-
-- **Method**: `DELETE`
-- **Path**: `/api/suppliers/{id}`
-- **Response (`204 No Content`)**: Soft deactivates the supplier (`active = false`).
-
-#### 3. Get Active Suppliers
+#### 5. Get Low-Stock Products
 
 - **Method**: `GET`
-- **Path**: `/api/suppliers/active`
-- **Response (`200 OK`)**: List containing only active suppliers.
+- **Path**: `/api/inventory/low-stock`
+- **Response (`200 OK`)**:
+
+```json
+[
+  {
+    "productId": 1,
+    "sku": "BRG-6204",
+    "productName": "Steel Bearing 6204",
+    "quantityAvailable": 15,
+    "reorderLevel": 20,
+    "lowStock": true
+  }
+]
+```
+
+#### 6. Get Movement History
+
+- **Method**: `GET`
+- **Path**: `/api/inventory/{productId}/movements`
+- **Response (`200 OK`)**:
+
+```json
+[
+  {
+    "id": 3,
+    "productId": 1,
+    "movementType": "ADJUSTMENT",
+    "quantity": 80,
+    "reference": "AUDIT-SEPT-2026",
+    "reason": "Physical cycle count",
+    "createdAt": "2026-09-11T08:43:59.052389Z"
+  },
+  {
+    "id": 2,
+    "productId": 1,
+    "movementType": "STOCK_OUT",
+    "quantity": 85,
+    "reference": "PROD-REQ-501",
+    "reason": "Assembly line consumption",
+    "createdAt": "2026-09-11T08:43:58.998612Z"
+  },
+  {
+    "id": 1,
+    "productId": 1,
+    "movementType": "STOCK_IN",
+    "quantity": 100,
+    "reference": "GRN-1001",
+    "reason": "Initial stock batch",
+    "createdAt": "2026-09-11T08:43:58.975774Z"
+  }
+]
+```
+
+---
+
+## Example End-to-End Inventory Lifecycle Workflow
+
+The complete end-to-end lifecycle demonstrates how the system maintains accurate stock counts and prevents negative stock:
+
+1. **Step 1 — Create Product**:
+   `POST /api/products` with SKU `PMP-3001` and `reorderLevel = 20`.
+   - The product is created and an associated `Inventory` record is automatically initialized with `quantityAvailable = 0` (`lowStock: true`).
+2. **Step 2 — Stock In**:
+   `POST /api/inventory/stock-in` with `quantity = 100`.
+   - Inventory becomes `100` (`lowStock: false`). A `STOCK_IN` movement is logged.
+3. **Step 3 — Stock Out**:
+   `POST /api/inventory/stock-out` with `quantity = 85`.
+   - Inventory becomes `15`. Since `15 <= 20`, the product is tagged as `lowStock: true`. A `STOCK_OUT` movement is logged.
+4. **Step 4 — Low-Stock Detection**:
+   `GET /api/inventory/low-stock` query executes directly against PostgreSQL.
+   - Product `PMP-3001` appears in the low-stock report.
+5. **Step 5 — Stock Out Rejection**:
+   `POST /api/inventory/stock-out` with `quantity = 20`.
+   - Request is rejected with `409 Conflict`. Stock remains `15`. No movement record is created.
+6. **Step 6 — Stock Adjustment**:
+   `POST /api/inventory/adjust` with `newQuantity = 95`.
+   - Inventory balance updates to `95`. An `ADJUSTMENT` movement is recorded with delta `+80`.
 
 ---
 
@@ -321,4 +433,4 @@ export DB_PASSWORD="your_password"
 ./mvnw spring-boot:run
 ```
 
-The server starts on port `8080`.
+The application starts on port `8080`.

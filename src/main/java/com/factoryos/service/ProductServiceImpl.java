@@ -18,10 +18,16 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
+    private final InventoryService inventoryService;
 
-    public ProductServiceImpl(ProductRepository productRepository, ProductMapper productMapper) {
+    public ProductServiceImpl(
+            ProductRepository productRepository,
+            ProductMapper productMapper,
+            InventoryService inventoryService
+    ) {
         this.productRepository = productRepository;
         this.productMapper = productMapper;
+        this.inventoryService = inventoryService;
     }
 
     @Override
@@ -34,6 +40,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product product = productMapper.toEntity(request);
         Product savedProduct = productRepository.save(product);
+        inventoryService.initializeInventory(savedProduct);
         return productMapper.toResponse(savedProduct);
     }
 

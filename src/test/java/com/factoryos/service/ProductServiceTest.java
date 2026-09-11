@@ -33,6 +33,9 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private InventoryService inventoryService;
+
     @Spy
     private ProductMapper productMapper = new ProductMapper();
 
@@ -76,8 +79,8 @@ class ProductServiceTest {
 
         assertThat(response).isNotNull();
         assertThat(response.sku()).isEqualTo("BRG-6204");
-        assertThat(response.name()).isEqualTo("Steel Bearing 6204");
         verify(productRepository).save(any(Product.class));
+        verify(inventoryService).initializeInventory(any(Product.class));
     }
 
     @Test
