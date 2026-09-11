@@ -61,11 +61,20 @@ PostgreSQL Database (factoryos)
 
 ## Features
 
-### Currently Implemented (Phases 1, 2, 3 & 3.5)
+### Currently Implemented (Phases 1, 2, 3, 3.5 & 4)
 
+- [x] **Purchase Order Management (Phase 4)**:
+  - Multi-item Purchase Orders linked to Suppliers (`ManyToOne`) and Products (`ManyToOne`).
+  - Strict inventory isolation: PO creation records procurement intent without mutating inventory balances.
+  - Automatic sequential order number generation (`PO-000001`, `PO-000002`).
+  - Historical unit price snapshotting on each `PurchaseOrderItem`.
+  - Authoritative backend financial calculations using `BigDecimal` (`subtotal = quantity × unitPrice`, `totalAmount = sum(subtotals)`).
+  - Business validations: enforces active suppliers, active products, positive quantities, and rejects duplicate products within a single PO.
+  - Initial `CREATED` status lifecycle modeling.
+  - Frontend integration: Dynamic multi-item PO creation modal, line item subtotal calculations, live total guidance, and order details modal.
 - [x] **Frontend Operations Dashboard (Phase 3.5)**:
   - Desktop-first, clean industrial operations UI built with React & Vite.
-  - 4 Core Views: Dashboard (KPI cards + Low Stock table), Products, Suppliers, Inventory.
+  - 5 Core Views: Dashboard (KPI cards + Low Stock table), Products, Suppliers, Inventory, Purchase Orders.
   - Centralized API layer (`src/api`) consuming Spring Boot REST APIs with CORS support.
   - Form validation with inline field errors mapped from backend `ErrorResponse`.
   - Negative-stock prevention with clear 409 conflict alerts.
@@ -97,13 +106,13 @@ PostgreSQL Database (factoryos)
   - Optimistic locking via `@Version` to protect against concurrent update collisions.
   - Restriction of stock movements on inactive products.
 - [x] **Centralized Exception Handling**: Uniform error envelopes (`ErrorResponse`) for 400 (Validation / Rule), 404 (Not Found), 409 (Conflict / Insufficient Stock / Duplicate), and 500 (Internal Error).
-- [x] **Automated Testing Suite**: 49 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
+- [x] **Automated Testing Suite**: 68 tests covering unit services (Mockito), WebMvc slice tests (MockMvc), and full context integration testing against PostgreSQL.
 - [x] **Health Check Endpoint**: `GET /api/health` returning operational status.
 
 ### Planned Features (Upcoming Phases)
 
-- [ ] **Purchase Orders**: Procurement workflows from draft to receiving and inventory updates
-- [ ] **Supplier Catalog Integration**: Product-supplier pricing and lead times
+- [ ] **PO Receiving & Approval Workflows (Phase 5)**: PO status transitions (`APPROVED`, `RECEIVED`, `CANCELLED`) and automatic inventory updates upon goods receipt
+- [ ] **Supplier Catalog Integration**: Product-supplier pricing agreements and lead times
 - [ ] **Authentication & Authorization**: Role-based access control and security
 
 ---
@@ -390,6 +399,107 @@ FactoryOS
   }
 ]
 ```
+
+---
+
+### Purchase Order Management Endpoints
+
+#### 1. Create Purchase Order
+
+- **Method**: `POST`
+- **Path**: `/api/purchase-orders`
+- **Request Body**:
+
+```json
+{
+  "supplierId": 2,
+  "expectedDeliveryDate": "2026-09-25",
+  "items": [
+    {
+      "productId": 2,
+      "quantity": 100,
+      "unitPrice": 250.0
+    },
+    {
+      "productId": 3,
+      "quantity": 10,
+      "unitPrice": 12000.0
+    }
+  ]
+}
+```
+
+- **Response (`201 Created`)**:
+
+```json
+{
+  "id": 1,
+  "orderNumber": "PO-000001",
+  "supplierId": 2,
+  "supplierName": "Apex Hardware Tools",
+  "status": "CREATED",
+  "orderDate": "2026-09-11",
+  "expectedDeliveryDate": "2026-09-25",
+  "totalAmount": 145000.0,
+  "items": [
+    {
+      "id": 1,
+      "productId": 2,
+      "sku": "VLV-1001",
+      "productName": "Ball Valve 1/2 Inch",
+      "quantity": 100,
+      "unitPrice": 250.0,
+      "subtotal": 25000.0
+    },
+    {
+      "id": 2,
+      "productId": 3,
+      "sku": "PMP-3001",
+      "productName": "Industrial Water Pump",
+      "quantity": 10,
+      "unitPrice": 12000.0,
+      "subtotal": 120000.0
+    }
+  ],
+  "createdAt": "2026-09-11T10:10:02.453507Z",
+  "updatedAt": "2026-09-11T10:10:02.453508Z"
+}
+```
+
+#### 2. Get All Purchase Orders
+
+- **Method**: `GET`
+- **Path**: `/api/purchase-orders`
+- **Response (`200 OK`)**:
+
+```json
+[
+  {
+    "id": 1,
+    "orderNumber": "PO-000001",
+    "supplierId": 2,
+    "supplierName": "Apex Hardware Tools",
+    "status": "CREATED",
+    "orderDate": "2026-09-11",
+    "expectedDeliveryDate": "2026-09-25",
+    "itemCount": 2,
+    "totalAmount": 145000.0,
+    "createdAt": "2026-09-11T10:10:02.453507Z"
+  }
+]
+```
+
+#### 3. Get Purchase Order by ID
+
+- **Method**: `GET`
+- **Path**: `/api/purchase-orders/{id}`
+- **Response (`200 OK`)**: Returns complete `PurchaseOrderResponse` with items and calculated totals.
+
+#### 4. Get Purchase Order by Order Number
+
+- **Method**: `GET`
+- **Path**: `/api/purchase-orders/order-number/{orderNumber}`
+- **Response (`200 OK`)**: Returns complete `PurchaseOrderResponse`.
 
 ---
 

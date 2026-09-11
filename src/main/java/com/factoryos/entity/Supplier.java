@@ -55,6 +55,10 @@ public class Supplier {
     @Builder.Default
     private Boolean active = true;
 
+    @jakarta.persistence.OneToMany(mappedBy = "supplier", fetch = jakarta.persistence.FetchType.LAZY)
+    @Builder.Default
+    private java.util.List<PurchaseOrder> purchaseOrders = new java.util.ArrayList<>();
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

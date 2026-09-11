@@ -5,12 +5,14 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { InventoryPage } from "./pages/InventoryPage";
+import { PurchaseOrdersPage } from "./pages/PurchaseOrdersPage";
 
 const TAB_TITLES = {
   dashboard: "Dashboard",
   products: "Products",
   suppliers: "Suppliers",
   inventory: "Inventory",
+  "purchase-orders": "Purchase Orders",
 };
 
 export default function App() {
@@ -26,6 +28,8 @@ export default function App() {
         return <SuppliersPage />;
       case "inventory":
         return <InventoryPage />;
+      case "purchase-orders":
+        return <PurchaseOrdersPage />;
       default:
         return <DashboardPage onNavigate={(tab) => setCurrentTab(tab)} />;
     }

@@ -1,11 +1,18 @@
 import React from "react";
-import { LayoutDashboard, Package, Truck, Layers } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  Truck,
+  Layers,
+  ShoppingCart,
+} from "lucide-react";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "products", label: "Products", icon: Package },
   { id: "suppliers", label: "Suppliers", icon: Truck },
   { id: "inventory", label: "Inventory", icon: Layers },
+  { id: "purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
 ];
 
 export function Sidebar({ currentTab, onSelectTab }) {
