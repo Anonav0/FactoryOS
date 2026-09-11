@@ -736,51 +736,51 @@ Every error response adheres to the `ErrorResponse` schema:
 
 FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrity across all architectural layers. The automated suite contains **116 automated tests** running with 0 failures and 0 errors.
 
-| Test Layer       | Test Class                              | Business Rule Tested                                                                   | Assertion Type                       | Sample Test Name                                                                   |
-| :--------------- | :-------------------------------------- | :------------------------------------------------------------------------------------- | :----------------------------------- | :--------------------------------------------------------------------------------- |
-| **Service Unit** | `InventoryServiceTest`                  | Negative stock prevention (`Stock-Out`)                                                | Exception + State Verification       | `stockOut_insufficientStock_throwsExceptionAndDoesNotSave`                         |
-| **Service Unit** | `InventoryServiceTest`                  | Inactive product inventory rejection                                                   | Exception Verification               | `stockIn_inactiveProduct_throwsBusinessRuleException`                              |
-| **Service Unit** | `InventoryServiceTest`                  | Low stock reorder threshold boundaries                                                 | Boolean Assertion                    | `getLowStockItems_atReorderLevel_marksLowStockTrue`                                |
-| **Service Unit** | `InventoryServiceTest`                  | Zero/negative quantity adjustment                                                      | Exception Verification               | `adjustStock_zeroOrNegativeQuantity_throwsIllegalArgumentException`                |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Strict status transitions (`CREATED -> APPROVED -> RECEIVED`)                          | Enum & State Verification            | `approvePurchaseOrder_validState_updatesStatus`                                    |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Terminal state immutability (`RECEIVED`/`CANCELLED`)                                   | Exception Verification               | `receivePurchaseOrder_alreadyReceived_throwsInvalidStateException`                 |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Purchase order atomic receipt & movement creation                                      | Repository Argument Captor           | `receivePurchaseOrder_approvedOrder_incrementsInventoryAndCreatesMovement`         |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Sequential order number generation (`PO-000001`)                                       | String Format Assertion              | `createPurchaseOrder_generatesSequentialOrderNumber`                               |
-| **Service Unit** | `PurchaseOrderServiceTest`              | Duplicate line-item product rejection                                                  | Exception Verification               | `createPurchaseOrder_duplicateProductInItems_throwsException`                      |
-| **Service Unit** | `ProductServiceTest`                    | SKU uniqueness validation                                                              | Exception Verification               | `createProduct_duplicateSku_throwsDuplicateResourceException`                      |
-| **Service Unit** | `SupplierServiceTest`                   | Supplier email uniqueness                                                              | Exception Verification               | `createSupplier_duplicateEmail_throwsDuplicateResourceException`                   |
-| **WebMvc Slice** | `CorsConfigTest`                        | Preflight CORS origin filtering and unauthorized rejection                             | HTTP Status + Access-Control Headers | `cors_shouldAllowConfiguredDevOrigin`                                              |
-| **WebMvc Slice** | `FactoryOsPropertiesTest`               | Configuration property binding and default fallback validation                         | AssertJ Context Assertions           | `shouldBindDefaultAllowedOrigins`                                                  |
-| **WebMvc Slice** | `InventoryControllerTest`               | Request body validation (`quantity > 0`, `@NotNull`)                                   | HTTP 400 + JSON Error Fields         | `stockIn_zeroQuantity_returnsBadRequest`                                           |
-| **WebMvc Slice** | `PurchaseOrderControllerTest`           | Nested collection item validation (`items[0].quantity <= 0`)                           | HTTP 400 + Nested JSON Paths         | `createPurchaseOrder_invalidItemQuantityAndPrice_returnsBadRequestWithFieldErrors` |
-| **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Domain exception to HTTP code translations                                             | HTTP Status + ErrorResponse Envelope | `handleInsufficientStockException_returnsConflictResponse`                         |
-| **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Internal server error sanitization (no SQL leaks)                                      | Generic Error Message Assertion      | `handleGenericException_returnsInternalServerErrorResponse`                        |
-| **WebMvc Slice** | `OpenApiConfigTest`                     | OpenAPI specification generation (`/v3/api-docs`)                                      | JSON Spec Metadata Assertions        | `apiDocsEndpointReturnsMetadata`                                                   |
-| **WebMvc Slice** | `OpenApiConfigTest`                     | Swagger UI endpoint accessibility                                                      | HTTP 3xx Redirection                 | `swaggerUiEndpointIsAccessible`                                                    |
-| **Integration**  | `ProductionHardeningIntegrationTest`    | Optimistic locking collision prevention on concurrent inventory updates               | `ObjectOptimisticLockingFailureException` | `optimisticLocking_concurrentUpdate_throwsConflict`                         |
-| **Integration**  | `ProductionHardeningIntegrationTest`    | Database constraint enforcement (duplicate SKU uniqueness)                             | `DataIntegrityViolationException`    | `duplicateSku_violatesUniqueConstraint`                                            |
-| **Integration**  | `DevelopmentDataInitializerTest`        | Realistic multi-tier demo data initialization                                          | Repository Count Assertions          | `seedsProductsAndSuppliers`                                                        |
-| **Integration**  | `DevelopmentDataInitializerTest`        | Seed idempotency (no duplicate records on restarts)                                    | Idempotent Run State Assertions      | `seedingIsIdempotent`                                                              |
-| **Integration**  | `PurchaseOrderReceivingIntegrationTest` | End-to-end receipt updates inventory, movements, and PO status                         | Database State Assertions            | `receivePurchaseOrder_successful_updatesInventoryAndMovementsAndStatus`            |
-| **Integration**  | `PurchaseOrderReceivingIntegrationTest` | **Atomic rollback proof**: fails midway, rolls back all previous stock & audit records | Strict Database Pre/Post Assertions  | `receivePurchaseOrder_whenItemFails_rollsBackEntireTransactionAtomically`          |
-| **Integration**  | `InventoryIntegrationTest`              | Database-level unique SKU constraint enforcement                                       | `DataIntegrityViolationException`    | `duplicateSku_violatesDatabaseUniqueConstraint`                                    |
-| **Integration**  | `InventoryIntegrationTest`              | Real database stock lifecycle (stock-in, stock-out, boundary checks)                   | Direct Database Queries              | `inventoryLifecycle_stockInStockOutAndNegativeStockRejection`                      |
+| Test Layer       | Test Class                              | Business Rule Tested                                                                   | Assertion Type                            | Sample Test Name                                                                   |
+| :--------------- | :-------------------------------------- | :------------------------------------------------------------------------------------- | :---------------------------------------- | :--------------------------------------------------------------------------------- |
+| **Service Unit** | `InventoryServiceTest`                  | Negative stock prevention (`Stock-Out`)                                                | Exception + State Verification            | `stockOut_insufficientStock_throwsExceptionAndDoesNotSave`                         |
+| **Service Unit** | `InventoryServiceTest`                  | Inactive product inventory rejection                                                   | Exception Verification                    | `stockIn_inactiveProduct_throwsBusinessRuleException`                              |
+| **Service Unit** | `InventoryServiceTest`                  | Low stock reorder threshold boundaries                                                 | Boolean Assertion                         | `getLowStockItems_atReorderLevel_marksLowStockTrue`                                |
+| **Service Unit** | `InventoryServiceTest`                  | Zero/negative quantity adjustment                                                      | Exception Verification                    | `adjustStock_zeroOrNegativeQuantity_throwsIllegalArgumentException`                |
+| **Service Unit** | `PurchaseOrderServiceTest`              | Strict status transitions (`CREATED -> APPROVED -> RECEIVED`)                          | Enum & State Verification                 | `approvePurchaseOrder_validState_updatesStatus`                                    |
+| **Service Unit** | `PurchaseOrderServiceTest`              | Terminal state immutability (`RECEIVED`/`CANCELLED`)                                   | Exception Verification                    | `receivePurchaseOrder_alreadyReceived_throwsInvalidStateException`                 |
+| **Service Unit** | `PurchaseOrderServiceTest`              | Purchase order atomic receipt & movement creation                                      | Repository Argument Captor                | `receivePurchaseOrder_approvedOrder_incrementsInventoryAndCreatesMovement`         |
+| **Service Unit** | `PurchaseOrderServiceTest`              | Sequential order number generation (`PO-000001`)                                       | String Format Assertion                   | `createPurchaseOrder_generatesSequentialOrderNumber`                               |
+| **Service Unit** | `PurchaseOrderServiceTest`              | Duplicate line-item product rejection                                                  | Exception Verification                    | `createPurchaseOrder_duplicateProductInItems_throwsException`                      |
+| **Service Unit** | `ProductServiceTest`                    | SKU uniqueness validation                                                              | Exception Verification                    | `createProduct_duplicateSku_throwsDuplicateResourceException`                      |
+| **Service Unit** | `SupplierServiceTest`                   | Supplier email uniqueness                                                              | Exception Verification                    | `createSupplier_duplicateEmail_throwsDuplicateResourceException`                   |
+| **WebMvc Slice** | `CorsConfigTest`                        | Preflight CORS origin filtering and unauthorized rejection                             | HTTP Status + Access-Control Headers      | `cors_shouldAllowConfiguredDevOrigin`                                              |
+| **WebMvc Slice** | `FactoryOsPropertiesTest`               | Configuration property binding and default fallback validation                         | AssertJ Context Assertions                | `shouldBindDefaultAllowedOrigins`                                                  |
+| **WebMvc Slice** | `InventoryControllerTest`               | Request body validation (`quantity > 0`, `@NotNull`)                                   | HTTP 400 + JSON Error Fields              | `stockIn_zeroQuantity_returnsBadRequest`                                           |
+| **WebMvc Slice** | `PurchaseOrderControllerTest`           | Nested collection item validation (`items[0].quantity <= 0`)                           | HTTP 400 + Nested JSON Paths              | `createPurchaseOrder_invalidItemQuantityAndPrice_returnsBadRequestWithFieldErrors` |
+| **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Domain exception to HTTP code translations                                             | HTTP Status + ErrorResponse Envelope      | `handleInsufficientStockException_returnsConflictResponse`                         |
+| **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Internal server error sanitization (no SQL leaks)                                      | Generic Error Message Assertion           | `handleGenericException_returnsInternalServerErrorResponse`                        |
+| **WebMvc Slice** | `OpenApiConfigTest`                     | OpenAPI specification generation (`/v3/api-docs`)                                      | JSON Spec Metadata Assertions             | `apiDocsEndpointReturnsMetadata`                                                   |
+| **WebMvc Slice** | `OpenApiConfigTest`                     | Swagger UI endpoint accessibility                                                      | HTTP 3xx Redirection                      | `swaggerUiEndpointIsAccessible`                                                    |
+| **Integration**  | `ProductionHardeningIntegrationTest`    | Optimistic locking collision prevention on concurrent inventory updates                | `ObjectOptimisticLockingFailureException` | `optimisticLocking_concurrentUpdate_throwsConflict`                                |
+| **Integration**  | `ProductionHardeningIntegrationTest`    | Database constraint enforcement (duplicate SKU uniqueness)                             | `DataIntegrityViolationException`         | `duplicateSku_violatesUniqueConstraint`                                            |
+| **Integration**  | `DevelopmentDataInitializerTest`        | Realistic multi-tier demo data initialization                                          | Repository Count Assertions               | `seedsProductsAndSuppliers`                                                        |
+| **Integration**  | `DevelopmentDataInitializerTest`        | Seed idempotency (no duplicate records on restarts)                                    | Idempotent Run State Assertions           | `seedingIsIdempotent`                                                              |
+| **Integration**  | `PurchaseOrderReceivingIntegrationTest` | End-to-end receipt updates inventory, movements, and PO status                         | Database State Assertions                 | `receivePurchaseOrder_successful_updatesInventoryAndMovementsAndStatus`            |
+| **Integration**  | `PurchaseOrderReceivingIntegrationTest` | **Atomic rollback proof**: fails midway, rolls back all previous stock & audit records | Strict Database Pre/Post Assertions       | `receivePurchaseOrder_whenItemFails_rollsBackEntireTransactionAtomically`          |
+| **Integration**  | `InventoryIntegrationTest`              | Database-level unique SKU constraint enforcement                                       | `DataIntegrityViolationException`         | `duplicateSku_violatesDatabaseUniqueConstraint`                                    |
+| **Integration**  | `InventoryIntegrationTest`              | Real database stock lifecycle (stock-in, stock-out, boundary checks)                   | Direct Database Queries                   | `inventoryLifecycle_stockInStockOutAndNegativeStockRejection`                      |
 
 ### Code Coverage (JaCoCo)
 
 FactoryOS utilizes `jacoco-maven-plugin` (0.8.12) to verify test execution depth.
 
-| Package                      | Instruction Coverage    | Branch Coverage | Classes Analyzed |
-| :--------------------------- | :---------------------- | :-------------- | :--------------- |
-| `com.factoryos.config`       | **100%**                | **90%**         | 5                |
-| `com.factoryos.dto`          | **100%**                | N/A             | 18               |
-| `com.factoryos.controller`   | **89%**                 | N/A             | 5                |
-| `com.factoryos.service`      | **89%**                 | **66%**         | 3                |
-| `com.factoryos.exception`    | **84%**                 | **55%**         | 10               |
-| `com.factoryos.entity`       | **79%**                 | **50%**         | 7                |
-| `com.factoryos.service.impl` | **74%**                 | **71%**         | 1                |
-| `com.factoryos.mapper`       | **74%**                 | **42%**         | 5                |
-| **Total Project**            | **86%**                 | **57%**         | **55**           |
+| Package                      | Instruction Coverage | Branch Coverage | Classes Analyzed |
+| :--------------------------- | :------------------- | :-------------- | :--------------- |
+| `com.factoryos.config`       | **100%**             | **90%**         | 5                |
+| `com.factoryos.dto`          | **100%**             | N/A             | 18               |
+| `com.factoryos.controller`   | **89%**              | N/A             | 5                |
+| `com.factoryos.service`      | **89%**              | **66%**         | 3                |
+| `com.factoryos.exception`    | **84%**              | **55%**         | 10               |
+| `com.factoryos.entity`       | **79%**              | **50%**         | 7                |
+| `com.factoryos.service.impl` | **74%**              | **71%**         | 1                |
+| `com.factoryos.mapper`       | **74%**              | **42%**         | 5                |
+| **Total Project**            | **86%**              | **57%**         | **55**           |
 
 To generate the HTML coverage report locally:
 
@@ -800,16 +800,16 @@ FactoryOS is engineered to cleanly separate development conveniences from strict
 
 All operational parameters are externalized from compiled source code and can be injected via standard environment variables or container secrets:
 
-| Variable | Description | Default (Dev) | Production Recommendation |
-| :--- | :--- | :--- | :--- |
-| `SPRING_PROFILES_ACTIVE` | Active Spring profile (`dev`, `demo`, `prod`) | `dev` | Set to `prod` |
-| `SERVER_PORT` | HTTP server listening port | `8080` | Container-specific port or `8080` |
-| `DB_URL` | JDBC URL for PostgreSQL database | `jdbc:postgresql://localhost:5432/factoryos` | Production RDS/Cloud SQL JDBC endpoint with TLS |
-| `DB_USERNAME` | Database connection username | `postgres` | Least-privilege application user |
-| `DB_PASSWORD` | Database connection password | `postgres` | Secure secret managed via vault/secrets manager |
-| `JPA_DDL_AUTO` | Hibernate DDL lifecycle strategy | `update` (dev) | `validate` (schema managed via controlled migrations) |
-| `CORS_ALLOWED_ORIGINS` | Permitted browser origins for API | `http://localhost:5173` | Exact production frontend URL (e.g., `https://factoryos.company.com`) |
-| `SWAGGER_ENABLED` | Toggle OpenAPI docs and Swagger UI | `true` (dev) | `false` (or restricted via gateway) |
+| Variable                 | Description                                   | Default (Dev)                                | Production Recommendation                                             |
+| :----------------------- | :-------------------------------------------- | :------------------------------------------- | :-------------------------------------------------------------------- |
+| `SPRING_PROFILES_ACTIVE` | Active Spring profile (`dev`, `demo`, `prod`) | `dev`                                        | Set to `prod`                                                         |
+| `SERVER_PORT`            | HTTP server listening port                    | `8080`                                       | Container-specific port or `8080`                                     |
+| `DB_URL`                 | JDBC URL for PostgreSQL database              | `jdbc:postgresql://localhost:5432/factoryos` | Production RDS/Cloud SQL JDBC endpoint with TLS                       |
+| `DB_USERNAME`            | Database connection username                  | `postgres`                                   | Least-privilege application user                                      |
+| `DB_PASSWORD`            | Database connection password                  | `postgres`                                   | Secure secret managed via vault/secrets manager                       |
+| `JPA_DDL_AUTO`           | Hibernate DDL lifecycle strategy              | `update` (dev)                               | `validate` (schema managed via controlled migrations)                 |
+| `CORS_ALLOWED_ORIGINS`   | Permitted browser origins for API             | `http://localhost:5173`                      | Exact production frontend URL (e.g., `https://factoryos.company.com`) |
+| `SWAGGER_ENABLED`        | Toggle OpenAPI docs and Swagger UI            | `true` (dev)                                 | `false` (or restricted via gateway)                                   |
 
 ### Development vs. Production Profile Separation
 
@@ -840,6 +840,7 @@ FactoryOS enforces critical industrial invariants directly in the database engin
 ### Concurrency & Optimistic Locking
 
 To protect inventory and procurement states against race conditions and concurrent write collisions:
+
 - `Inventory` entity is guarded by a `@Version` counter.
 - `PurchaseOrder` entity is guarded by a `@Version` counter.
 - When concurrent operations attempt conflicting updates, the stale transaction throws `ObjectOptimisticLockingFailureException`, which `GlobalExceptionHandler` translates into a structured `409 Conflict` ("Optimistic Lock Conflict").
