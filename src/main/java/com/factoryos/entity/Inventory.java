@@ -32,6 +32,7 @@ import java.time.Instant;
                 @Index(name = "idx_inventory_product_id", columnList = "product_id")
         }
 )
+@org.hibernate.annotations.Check(constraints = "quantity_available >= 0 AND reserved_quantity >= 0")
 @Getter
 @Setter
 @NoArgsConstructor

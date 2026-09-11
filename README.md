@@ -61,8 +61,17 @@ PostgreSQL Database (factoryos)
 
 ## Features
 
-### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5, 6, 7 & 8)
+### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5, 6, 7, 8 & 9)
 
+- [x] **Production Hardening (Phase 9)**:
+  - Configuration externalization with environment variable overrides (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `SERVER_PORT`, `CORS_ALLOWED_ORIGINS`, `JPA_DDL_AUTO`, `SWAGGER_ENABLED`).
+  - Production profile separation (`application-prod.properties`) enforcing `spring.jpa.hibernate.ddl-auto=validate` so production never modifies schemas at startup.
+  - Database check constraints (`@Check`) on prices, quantities, and totals across `Product`, `Inventory`, `PurchaseOrder`, and `PurchaseOrderItem`.
+  - Configurable CORS origin protection via validated `FactoryOsProperties` without wildcard exposure.
+  - SLF4J audit logging across all domain services without leaking credentials or internal details.
+  - Purchase order line-item capacity safety limits (`@Size(min = 1, max = 100)`).
+  - Optimistic locking collision handling translating to HTTP `409 Conflict`.
+  - Automated test suite expanded to **116 tests** (100% passing) and **86% JaCoCo instruction coverage**.
 - [x] **API Documentation & Demo Data (Phase 8)**:
   - Full OpenAPI 3.1 & Swagger UI integration via `springdoc-openapi-starter-webmvc-ui` (v2.8.5) accessible at `/swagger-ui/index.html` and `/v3/api-docs`.
   - Comprehensive API documentation across 5 core domain tags: `Products`, `Suppliers`, `Inventory`, `Purchase Orders`, and `System`.
@@ -725,7 +734,7 @@ Every error response adheres to the `ErrorResponse` schema:
 
 ## Automated Test Suite & Business Rules Matrix
 
-FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrity across all architectural layers. The automated suite contains **109 automated tests** running in ~24 seconds with 0 failures and 0 errors.
+FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrity across all architectural layers. The automated suite contains **116 automated tests** running with 0 failures and 0 errors.
 
 | Test Layer       | Test Class                              | Business Rule Tested                                                                   | Assertion Type                       | Sample Test Name                                                                   |
 | :--------------- | :-------------------------------------- | :------------------------------------------------------------------------------------- | :----------------------------------- | :--------------------------------------------------------------------------------- |
@@ -740,12 +749,16 @@ FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrit
 | **Service Unit** | `PurchaseOrderServiceTest`              | Duplicate line-item product rejection                                                  | Exception Verification               | `createPurchaseOrder_duplicateProductInItems_throwsException`                      |
 | **Service Unit** | `ProductServiceTest`                    | SKU uniqueness validation                                                              | Exception Verification               | `createProduct_duplicateSku_throwsDuplicateResourceException`                      |
 | **Service Unit** | `SupplierServiceTest`                   | Supplier email uniqueness                                                              | Exception Verification               | `createSupplier_duplicateEmail_throwsDuplicateResourceException`                   |
+| **WebMvc Slice** | `CorsConfigTest`                        | Preflight CORS origin filtering and unauthorized rejection                             | HTTP Status + Access-Control Headers | `cors_shouldAllowConfiguredDevOrigin`                                              |
+| **WebMvc Slice** | `FactoryOsPropertiesTest`               | Configuration property binding and default fallback validation                         | AssertJ Context Assertions           | `shouldBindDefaultAllowedOrigins`                                                  |
 | **WebMvc Slice** | `InventoryControllerTest`               | Request body validation (`quantity > 0`, `@NotNull`)                                   | HTTP 400 + JSON Error Fields         | `stockIn_zeroQuantity_returnsBadRequest`                                           |
 | **WebMvc Slice** | `PurchaseOrderControllerTest`           | Nested collection item validation (`items[0].quantity <= 0`)                           | HTTP 400 + Nested JSON Paths         | `createPurchaseOrder_invalidItemQuantityAndPrice_returnsBadRequestWithFieldErrors` |
 | **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Domain exception to HTTP code translations                                             | HTTP Status + ErrorResponse Envelope | `handleInsufficientStockException_returnsConflictResponse`                         |
 | **WebMvc Slice** | `GlobalExceptionHandlerTest`            | Internal server error sanitization (no SQL leaks)                                      | Generic Error Message Assertion      | `handleGenericException_returnsInternalServerErrorResponse`                        |
 | **WebMvc Slice** | `OpenApiConfigTest`                     | OpenAPI specification generation (`/v3/api-docs`)                                      | JSON Spec Metadata Assertions        | `apiDocsEndpointReturnsMetadata`                                                   |
 | **WebMvc Slice** | `OpenApiConfigTest`                     | Swagger UI endpoint accessibility                                                      | HTTP 3xx Redirection                 | `swaggerUiEndpointIsAccessible`                                                    |
+| **Integration**  | `ProductionHardeningIntegrationTest`    | Optimistic locking collision prevention on concurrent inventory updates               | `ObjectOptimisticLockingFailureException` | `optimisticLocking_concurrentUpdate_throwsConflict`                         |
+| **Integration**  | `ProductionHardeningIntegrationTest`    | Database constraint enforcement (duplicate SKU uniqueness)                             | `DataIntegrityViolationException`    | `duplicateSku_violatesUniqueConstraint`                                            |
 | **Integration**  | `DevelopmentDataInitializerTest`        | Realistic multi-tier demo data initialization                                          | Repository Count Assertions          | `seedsProductsAndSuppliers`                                                        |
 | **Integration**  | `DevelopmentDataInitializerTest`        | Seed idempotency (no duplicate records on restarts)                                    | Idempotent Run State Assertions      | `seedingIsIdempotent`                                                              |
 | **Integration**  | `PurchaseOrderReceivingIntegrationTest` | End-to-end receipt updates inventory, movements, and PO status                         | Database State Assertions            | `receivePurchaseOrder_successful_updatesInventoryAndMovementsAndStatus`            |
@@ -759,15 +772,15 @@ FactoryOS utilizes `jacoco-maven-plugin` (0.8.12) to verify test execution depth
 
 | Package                      | Instruction Coverage    | Branch Coverage | Classes Analyzed |
 | :--------------------------- | :---------------------- | :-------------- | :--------------- |
-| `com.factoryos.config`       | **100%**                | **90%**         | 3                |
+| `com.factoryos.config`       | **100%**                | **90%**         | 5                |
 | `com.factoryos.dto`          | **100%**                | N/A             | 18               |
 | `com.factoryos.controller`   | **89%**                 | N/A             | 5                |
-| `com.factoryos.service`      | **87%**                 | **66%**         | 3                |
+| `com.factoryos.service`      | **89%**                 | **66%**         | 3                |
 | `com.factoryos.exception`    | **84%**                 | **55%**         | 10               |
 | `com.factoryos.entity`       | **79%**                 | **50%**         | 7                |
-| `com.factoryos.service.impl` | **72%**                 | **71%**         | 1                |
+| `com.factoryos.service.impl` | **74%**                 | **71%**         | 1                |
 | `com.factoryos.mapper`       | **74%**                 | **42%**         | 5                |
-| **Total Project**            | **85%** (3,262 / 3,802) | **57%**         | **53**           |
+| **Total Project**            | **86%**                 | **57%**         | **55**           |
 
 To generate the HTML coverage report locally:
 
@@ -779,45 +792,64 @@ The report is saved to `target/site/jacoco/index.html`.
 
 ---
 
-## Technical Interview Q&A
+## Production Hardening & Configuration Guide
 
-### Q1: How do you design service-level unit tests for critical inventory operations?
+FactoryOS is engineered to cleanly separate development conveniences from strict production security and data integrity requirements.
 
-**Answer:**
-When testing mission-critical inventory services, tests must focus on **domain rules and financial boundary conditions**, rather than shallow getter/setter assertions. Key practices include:
+### Environment Variable Matrix
 
-1. **Testing Boundary Limits**: Verifying stock balance changes at exact thresholds — such as available quantity dropping to `0` (legal stock-out) vs `-1` (illegal; must trigger `InsufficientStockException`), and available stock equal to `reorderLevel` vs `reorderLevel + 1` for low-stock alerts.
-2. **Defensive Precondition Checks**: Testing that operations on inactive products or disabled suppliers throw domain exceptions (`BusinessRuleException`) _before_ any repository mutation occurs.
-3. **Verifying Side Effects & Audit Trails**: Using Mockito `ArgumentCaptor` to inspect not only that `inventoryRepository.save()` was invoked with the exact mathematical balance, but also that `stockMovementRepository.save()` received a movement entity with the correct movement type (`STOCK_IN`, `STOCK_OUT`, `ADJUSTMENT`), delta, reference type, and previous-vs-new balance snapshots.
-4. **Negative Scenario Assertion**: Testing that when a validation or balance check fails, repositories are never touched (`verify(..., never()).save(...)`), guaranteeing no uncommitted entity mutations leak into persistence context.
+All operational parameters are externalized from compiled source code and can be injected via standard environment variables or container secrets:
 
-### Q2: What are the trade-offs between Mockito unit tests, MockMvc slice tests, and Spring Boot integration tests?
+| Variable | Description | Default (Dev) | Production Recommendation |
+| :--- | :--- | :--- | :--- |
+| `SPRING_PROFILES_ACTIVE` | Active Spring profile (`dev`, `demo`, `prod`) | `dev` | Set to `prod` |
+| `SERVER_PORT` | HTTP server listening port | `8080` | Container-specific port or `8080` |
+| `DB_URL` | JDBC URL for PostgreSQL database | `jdbc:postgresql://localhost:5432/factoryos` | Production RDS/Cloud SQL JDBC endpoint with TLS |
+| `DB_USERNAME` | Database connection username | `postgres` | Least-privilege application user |
+| `DB_PASSWORD` | Database connection password | `postgres` | Secure secret managed via vault/secrets manager |
+| `JPA_DDL_AUTO` | Hibernate DDL lifecycle strategy | `update` (dev) | `validate` (schema managed via controlled migrations) |
+| `CORS_ALLOWED_ORIGINS` | Permitted browser origins for API | `http://localhost:5173` | Exact production frontend URL (e.g., `https://factoryos.company.com`) |
+| `SWAGGER_ENABLED` | Toggle OpenAPI docs and Swagger UI | `true` (dev) | `false` (or restricted via gateway) |
 
-**Answer:**
-A production-grade system balances speed, isolation, and confidence across three distinct test layers:
+### Development vs. Production Profile Separation
 
-- **Mockito Unit Tests (`@ExtendWith(MockitoExtension.class)`)**:
-  - _Pros_: Extremely fast (milliseconds), fully isolated, perfect for exhaustive combinatorial business logic, edge cases, and arithmetic invariants.
-  - _Cons_: Ignores framework wiring, JPA entity mappings, database constraints, Bean Validation annotations, and transaction boundaries.
-- **MockMvc Slice Tests (`@WebMvcTest`)**:
-  - _Pros_: Tests the web layer in isolation without booting the persistence layer or database. Validates HTTP routes, status codes, JSON serialization/deserialization, Jakarta validation constraints (`@Valid`, `@NotNull`, `@Min`), and `@RestControllerAdvice` exception translations.
-  - _Cons_: Mocks out the service layer; does not verify SQL queries, ORM cascades, database check constraints, or actual transactional atomicity.
-- **Spring Boot Integration Tests (`@SpringBootTest` with live database)**:
-  - _Pros_: Maximum confidence. Tests full application context, Hibernate SQL generation, PostgreSQL foreign keys, unique indices, and `@Transactional` rollbacks.
-  - _Cons_: Slower startup time and requires clean fixture management (e.g., executing `deleteAllInBatch()` in reverse foreign key order) to avoid cross-test database pollution.
+1. **Development Profile (`dev`)**:
+   - Automatically active by default (`spring.profiles.default=dev`).
+   - `spring.jpa.hibernate.ddl-auto=update` allows rapid iterative development.
+   - `DevelopmentDataInitializer` automatically runs idempotently to populate rich seed datasets.
+   - Swagger UI and OpenAPI documentation are enabled at `/swagger-ui/index.html`.
+   - Permissive local CORS defaults to `http://localhost:5173`.
 
-### Q3: How do you prove that an inventory transaction actually rolled back on database errors?
+2. **Production Profile (`prod`)**:
+   - Activated via `SPRING_PROFILES_ACTIVE=prod`.
+   - Configured in `src/main/resources/application-prod.properties`.
+   - `spring.jpa.hibernate.ddl-auto=validate`: **Guarantees the application never silently modifies the database schema at startup.** Any discrepancy between JPA entities and database tables triggers a fast, fail-safe application startup abort.
+   - `DevelopmentDataInitializer` is **disabled** (`@Profile({"dev", "demo"})`), ensuring zero demo records are seeded into production.
+   - Swagger UI is **disabled** by default (`SWAGGER_ENABLED=false`) to protect API surface introspection.
+   - SQL query logging is disabled (`show-sql=false`, `logging.level.org.hibernate.SQL=WARN`) to eliminate performance overhead and prevent parameter leakage.
 
-**Answer:**
-You cannot prove `@Transactional` rollback using unit tests with mocks, because mocks do not participate in a real database transaction. To prove transaction rollback:
+### Database Constraints & Invariant Enforcement
 
-1. **Use a Real Database Environment**: Run a `@SpringBootTest` test connecting to a real PostgreSQL instance (not an in-memory database that might lack PostgreSQL-specific constraint behaviors).
-2. **Setup Multi-Step Workflows**: Construct a business scenario with multiple persistent mutations. In FactoryOS, `receivePurchaseOrder` receives a PO with multiple items. Processing Item 1 increments Product 1's inventory and inserts a `STOCK_IN` movement. Item 2 is intentionally configured with an invalid condition (e.g., an inactive product or constraint violation) that throws a runtime `BusinessRuleException` midway through the loop.
-3. **Execute Outside Test-Managed Transactions**: Do **not** annotate the test method with `@Transactional` (which would auto-rollback the entire test method and mask whether the service method's transaction rolled back).
-4. **Assert Database State Post-Failure**:
-   - Verify that the service method threw the expected exception.
-   - Query the database directly via repositories: - Verify Product 1's inventory quantity remains at its original value (e.g., exactly 100, not 150). - Verify Product 2's inventory quantity remains untouched. - Verify `stockMovementRepository.count()` is `0` (the movement created for Item 1 was completely rolled back). - Verify the purchase order status remains `APPROVED`, not `RECEIVED`.
-     This conclusively proves that the transaction boundary preserved the ACID atomicity guarantee: all mutations succeeded together or all were reverted.
+FactoryOS enforces critical industrial invariants directly in the database engine using PostgreSQL check constraints in addition to application-layer Bean Validation:
+
+- **Products**: `unit_price >= 0 AND reorder_level >= 0` enforced via `@Check` and `uk_product_sku` unique constraint.
+- **Inventory**: `quantity_available >= 0 AND reserved_quantity >= 0` enforced via `@Check` and `uk_inventory_product_id` unique constraint.
+- **Purchase Orders**: `total_amount >= 0` enforced via `@Check` and `uk_purchase_order_number` unique constraint.
+- **Purchase Order Items**: `quantity > 0 AND unit_price >= 0 AND subtotal >= 0` enforced via `@Check`.
+
+### Concurrency & Optimistic Locking
+
+To protect inventory and procurement states against race conditions and concurrent write collisions:
+- `Inventory` entity is guarded by a `@Version` counter.
+- `PurchaseOrder` entity is guarded by a `@Version` counter.
+- When concurrent operations attempt conflicting updates, the stale transaction throws `ObjectOptimisticLockingFailureException`, which `GlobalExceptionHandler` translates into a structured `409 Conflict` ("Optimistic Lock Conflict").
+
+### Audit Logging & Secret Protection
+
+- Structured SLF4J logging across all services (`InventoryServiceImpl`, `ProductServiceImpl`, `SupplierServiceImpl`, `PurchaseOrderServiceImpl`).
+- High-signal operational records for all stock-in, stock-out, stock adjustment, product deactivation, and PO lifecycle state changes.
+- **Zero Sensitive Data In Logs**: No passwords, tokens, full request bodies, or internal database exception details are logged or exposed to clients.
+- `.gitignore` explicitly prevents `.env` and `.env.*` files from being committed, while `.env.example` provides an audited template.
 
 ---
 

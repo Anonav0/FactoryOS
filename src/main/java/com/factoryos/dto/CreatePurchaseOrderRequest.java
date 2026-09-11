@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,7 @@ public record CreatePurchaseOrderRequest(
 
         @Schema(description = "List of distinct product line items (must contain at least one item without duplicate products)")
         @NotEmpty(message = "Purchase order must contain at least one item")
+        @Size(min = 1, max = 100, message = "Purchase order must contain between 1 and 100 items")
         @Valid
         List<PurchaseOrderItemRequest> items
 ) {

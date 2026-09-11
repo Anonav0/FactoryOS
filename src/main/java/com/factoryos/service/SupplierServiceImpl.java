@@ -7,6 +7,8 @@ import com.factoryos.entity.Supplier;
 import com.factoryos.exception.ResourceNotFoundException;
 import com.factoryos.mapper.SupplierMapper;
 import com.factoryos.repository.SupplierRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +16,8 @@ import java.util.List;
 
 @Service
 public class SupplierServiceImpl implements SupplierService {
+
+    private static final Logger log = LoggerFactory.getLogger(SupplierServiceImpl.class);
 
     private final SupplierRepository supplierRepository;
     private final SupplierMapper supplierMapper;
@@ -28,6 +32,7 @@ public class SupplierServiceImpl implements SupplierService {
     public SupplierResponse createSupplier(CreateSupplierRequest request) {
         Supplier supplier = supplierMapper.toEntity(request);
         Supplier savedSupplier = supplierRepository.save(supplier);
+        log.info("Created supplier ID {} ('{}')", savedSupplier.getId(), savedSupplier.getName());
         return supplierMapper.toResponse(savedSupplier);
     }
 
@@ -69,6 +74,7 @@ public class SupplierServiceImpl implements SupplierService {
         }
 
         Supplier updatedSupplier = supplierRepository.save(supplier);
+        log.info("Updated supplier ID {} ('{}')", updatedSupplier.getId(), updatedSupplier.getName());
         return supplierMapper.toResponse(updatedSupplier);
     }
 
@@ -78,6 +84,7 @@ public class SupplierServiceImpl implements SupplierService {
         Supplier supplier = findSupplierOrThrow(id);
         supplier.setActive(false);
         supplierRepository.save(supplier);
+        log.info("Deactivated supplier ID {} ('{}')", supplier.getId(), supplier.getName());
     }
 
     private Supplier findSupplierOrThrow(Long id) {

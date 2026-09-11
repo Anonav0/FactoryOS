@@ -31,6 +31,7 @@ import java.time.Instant;
                 @Index(name = "idx_product_active", columnList = "active")
         }
 )
+@org.hibernate.annotations.Check(constraints = "unit_price >= 0 AND reorder_level >= 0")
 @Getter
 @Setter
 @NoArgsConstructor

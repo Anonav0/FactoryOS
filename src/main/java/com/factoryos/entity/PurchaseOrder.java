@@ -42,6 +42,7 @@ import java.util.List;
                 @Index(name = "idx_po_created_at", columnList = "created_at")
         }
 )
+@org.hibernate.annotations.Check(constraints = "total_amount >= 0")
 @Getter
 @Setter
 @NoArgsConstructor

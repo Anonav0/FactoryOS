@@ -20,6 +20,8 @@ import com.factoryos.mapper.StockMovementMapper;
 import com.factoryos.repository.InventoryRepository;
 import com.factoryos.repository.ProductRepository;
 import com.factoryos.repository.StockMovementRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,8 @@ import java.util.List;
 
 @Service
 public class InventoryServiceImpl implements InventoryService {
+
+    private static final Logger log = LoggerFactory.getLogger(InventoryServiceImpl.class);
 
     private final InventoryRepository inventoryRepository;
     private final StockMovementRepository stockMovementRepository;
@@ -66,6 +70,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .build();
         stockMovementRepository.save(movement);
 
+        log.info("Stock in recorded for product SKU '{}' (ID: {}): +{} units (Ref: '{}')",
+                product.getSku(), product.getId(), request.quantity(), request.reference());
+
         return inventoryMapper.toResponse(updatedInventory);
     }
 
@@ -96,6 +103,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .build();
         stockMovementRepository.save(movement);
 
+        log.info("Stock out recorded for product SKU '{}' (ID: {}): -{} units (Ref: '{}')",
+                product.getSku(), product.getId(), request.quantity(), request.reference());
+
         return inventoryMapper.toResponse(updatedInventory);
     }
 
@@ -121,6 +131,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .reason(request.reason())
                 .build();
         stockMovementRepository.save(movement);
+
+        log.info("Stock adjusted for product SKU '{}' (ID: {}): new quantity {} (delta: {}) (Ref: '{}')",
+                product.getSku(), product.getId(), request.newQuantity(), delta, request.reference());
 
         return inventoryMapper.toResponse(updatedInventory);
     }
@@ -168,7 +181,9 @@ public class InventoryServiceImpl implements InventoryService {
                             .quantityAvailable(0)
                             .reservedQuantity(0)
                             .build();
-                    return inventoryRepository.save(inventory);
+                    Inventory saved = inventoryRepository.save(inventory);
+                    log.info("Initialized inventory record for product SKU '{}' (ID: {})", product.getSku(), product.getId());
+                    return saved;
                 });
     }
 

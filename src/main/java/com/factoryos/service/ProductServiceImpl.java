@@ -8,6 +8,8 @@ import com.factoryos.exception.DuplicateResourceException;
 import com.factoryos.exception.ResourceNotFoundException;
 import com.factoryos.mapper.ProductMapper;
 import com.factoryos.repository.ProductRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,8 @@ import java.util.List;
 
 @Service
 public class ProductServiceImpl implements ProductService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductServiceImpl.class);
 
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
@@ -41,6 +45,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = productMapper.toEntity(request);
         Product savedProduct = productRepository.save(product);
         inventoryService.initializeInventory(savedProduct);
+        log.info("Created product SKU '{}' (ID: {}, name: '{}')", savedProduct.getSku(), savedProduct.getId(), savedProduct.getName());
         return productMapper.toResponse(savedProduct);
     }
 
@@ -94,6 +99,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product updatedProduct = productRepository.save(product);
+        log.info("Updated product ID {} (SKU: '{}')", updatedProduct.getId(), updatedProduct.getSku());
         return productMapper.toResponse(updatedProduct);
     }
 
@@ -103,6 +109,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = findProductOrThrow(id);
         product.setActive(false);
         productRepository.save(product);
+        log.info("Deactivated product ID {} (SKU: '{}')", product.getId(), product.getSku());
     }
 
     private Product findProductOrThrow(Long id) {

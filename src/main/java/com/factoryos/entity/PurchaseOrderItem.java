@@ -26,6 +26,7 @@ import java.math.BigDecimal;
                 @Index(name = "idx_poi_product_id", columnList = "product_id")
         }
 )
+@org.hibernate.annotations.Check(constraints = "quantity > 0 AND unit_price >= 0 AND subtotal >= 0")
 @Getter
 @Setter
 @NoArgsConstructor

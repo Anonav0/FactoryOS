@@ -23,6 +23,8 @@ import com.factoryos.repository.PurchaseOrderRepository;
 import com.factoryos.repository.StockMovementRepository;
 import com.factoryos.repository.SupplierRepository;
 import com.factoryos.service.PurchaseOrderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +37,8 @@ import java.util.Set;
 
 @Service
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(PurchaseOrderServiceImpl.class);
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final SupplierRepository supplierRepository;
@@ -134,6 +138,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         // 7. Persist order and cascade save items
         PurchaseOrder saved = purchaseOrderRepository.save(purchaseOrder);
+        log.info("Created purchase order '{}' for supplier '{}' with {} items (Total: {})",
+                saved.getOrderNumber(), supplier.getName(), saved.getItems().size(), saved.getTotalAmount());
         return purchaseOrderMapper.toResponse(saved);
     }
 
@@ -199,6 +205,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         po.setStatus(PurchaseOrderStatus.APPROVED);
         PurchaseOrder saved = purchaseOrderRepository.save(po);
+        log.info("Purchase order '{}' approved", po.getOrderNumber());
         return purchaseOrderMapper.toResponse(saved);
     }
 
@@ -256,6 +263,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.RECEIVED);
         PurchaseOrder saved = purchaseOrderRepository.save(po);
 
+        log.info("Purchase order '{}' received successfully: updated inventory and stock movements for {} items",
+                po.getOrderNumber(), po.getItems().size());
+
         return purchaseOrderMapper.toResponse(saved);
     }
 
@@ -278,6 +288,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         // Cancel order — inventory and stock movements remain unchanged
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         PurchaseOrder saved = purchaseOrderRepository.save(po);
+
+        log.info("Purchase order '{}' cancelled", po.getOrderNumber());
 
         return purchaseOrderMapper.toResponse(saved);
     }
