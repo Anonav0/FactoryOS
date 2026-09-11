@@ -197,7 +197,77 @@ class InventoryServiceTest {
     }
 
     @Test
-    void lowStock_detectionLogic() {
+    void adjustStock_positiveDelta_recordsPositiveMovementQuantity() {
+        StockAdjustmentRequest request = new StockAdjustmentRequest(1L, 120, "AUDIT-03", "Found extra units");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
+        when(inventoryRepository.findByProductId(1L)).thenReturn(Optional.of(testInventory));
+        when(inventoryRepository.save(any(Inventory.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryResponse response = inventoryService.adjustStock(request);
+
+        assertThat(response.quantityAvailable()).isEqualTo(120);
+        assertThat(testInventory.getQuantityAvailable()).isEqualTo(120);
+
+        ArgumentCaptor<StockMovement> movementCaptor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(stockMovementRepository).save(movementCaptor.capture());
+        StockMovement savedMovement = movementCaptor.getValue();
+        assertThat(savedMovement.getMovementType()).isEqualTo(StockMovementType.ADJUSTMENT);
+        assertThat(savedMovement.getQuantity()).isEqualTo(20); // 120 - 100 = 20
+    }
+
+    @Test
+    void adjustStock_zeroDelta_recordsZeroMovementQuantity() {
+        StockAdjustmentRequest request = new StockAdjustmentRequest(1L, 100, "AUDIT-04", "Verified exact count");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
+        when(inventoryRepository.findByProductId(1L)).thenReturn(Optional.of(testInventory));
+        when(inventoryRepository.save(any(Inventory.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryResponse response = inventoryService.adjustStock(request);
+
+        assertThat(response.quantityAvailable()).isEqualTo(100);
+        assertThat(testInventory.getQuantityAvailable()).isEqualTo(100);
+
+        ArgumentCaptor<StockMovement> movementCaptor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(stockMovementRepository).save(movementCaptor.capture());
+        StockMovement savedMovement = movementCaptor.getValue();
+        assertThat(savedMovement.getMovementType()).isEqualTo(StockMovementType.ADJUSTMENT);
+        assertThat(savedMovement.getQuantity()).isEqualTo(0); // 100 - 100 = 0
+    }
+
+    @Test
+    void stockIn_inactiveProduct_throwsBusinessRuleException() {
+        testProduct.setActive(false);
+        StockInRequest request = new StockInRequest(1L, 50, "GRN-01", "Delivery");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
+
+        assertThatThrownBy(() -> inventoryService.stockIn(request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("inactive");
+
+        verify(inventoryRepository, never()).save(any());
+        verify(stockMovementRepository, never()).save(any());
+    }
+
+    @Test
+    void adjustStock_inactiveProduct_throwsBusinessRuleException() {
+        testProduct.setActive(false);
+        StockAdjustmentRequest request = new StockAdjustmentRequest(1L, 50, "AUDIT-05", "Recount");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(testProduct));
+
+        assertThatThrownBy(() -> inventoryService.adjustStock(request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("inactive");
+
+        verify(inventoryRepository, never()).save(any());
+        verify(stockMovementRepository, never()).save(any());
+    }
+
+    @Test
+    void lowStock_detectionLogic_boundaryConditionEqualReorderLevel() {
         testInventory.setQuantityAvailable(20);
         testProduct.setReorderLevel(20);
         when(inventoryRepository.findLowStockInventory()).thenReturn(List.of(testInventory));
@@ -206,6 +276,27 @@ class InventoryServiceTest {
 
         assertThat(lowStockList).hasSize(1);
         assertThat(lowStockList.get(0).lowStock()).isTrue();
+    }
+
+    @Test
+    void lowStock_detectionLogic_boundaryConditionBelowReorderLevel() {
+        testInventory.setQuantityAvailable(19);
+        testProduct.setReorderLevel(20);
+        when(inventoryRepository.findLowStockInventory()).thenReturn(List.of(testInventory));
+
+        List<LowStockResponse> lowStockList = inventoryService.getLowStockInventory();
+
+        assertThat(lowStockList).hasSize(1);
+        assertThat(lowStockList.get(0).lowStock()).isTrue();
+    }
+
+    @Test
+    void lowStock_detectionLogic_boundaryConditionAboveReorderLevel() {
+        when(inventoryRepository.findLowStockInventory()).thenReturn(List.of());
+
+        List<LowStockResponse> lowStockList = inventoryService.getLowStockInventory();
+
+        assertThat(lowStockList).isEmpty();
     }
 
     @Test

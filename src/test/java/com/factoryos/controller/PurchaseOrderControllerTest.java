@@ -126,6 +126,25 @@ class PurchaseOrderControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/purchase-orders returns 400 Bad Request when nested item has invalid quantity or price")
+    void createPurchaseOrder_nestedItemValidationFailure_returns400() throws Exception {
+        CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
+                1L,
+                LocalDate.now().plusDays(10),
+                List.of(new PurchaseOrderItemRequest(10L, 0, new BigDecimal("-10.00")))
+        );
+
+        mockMvc.perform(post("/api/purchase-orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                .andExpect(jsonPath("$.errors['items[0].quantity']").exists())
+                .andExpect(jsonPath("$.errors['items[0].unitPrice']").exists());
+    }
+
+    @Test
     @DisplayName("POST /api/purchase-orders returns 400 when business rule is violated (e.g. duplicate product)")
     void createPurchaseOrder_businessRuleViolation_returns400() throws Exception {
         CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(

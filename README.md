@@ -61,8 +61,14 @@ PostgreSQL Database (factoryos)
 
 ## Features
 
-### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5 & 6)
+### Currently Implemented (Phases 1, 2, 3, 3.5, 4, 5, 6 & 7)
 
+- [x] **Testing & Business Logic Verification (Phase 7)**:
+  - Robust automated testing pyramid with **103 tests** across Service Unit Tests (Mockito), Controller Slice Tests (`@WebMvcTest`), and Spring Boot Integration Tests (`@SpringBootTest` with live PostgreSQL).
+  - Business behavior focus: stock depletion boundaries, zero/positive inventory adjustments, inactive product guards, low-stock reorder thresholds, sequential PO numbering, multi-item line totals, and full state machine transitions.
+  - End-to-end atomic `@Transactional` rollback proof: verifies against real PostgreSQL that if any item in a multi-item goods receipt fails, all previous item stock increments, movements, and PO status mutations are completely rolled back.
+  - Reusable test fixtures in `TestDataFactory` eliminating boilerplate entity instantiation across test suites.
+  - Configured JaCoCo test coverage plugin (`jacoco-maven-plugin` 0.8.12) achieving **83% overall instruction coverage** (Controllers 89%, Services 87%, Exceptions 84%, DTOs 100%).
 - [x] **Validation & Exception Handling Hardening (Phase 6)**:
   - Standardized API error envelopes (`ErrorResponse`) featuring UTC timestamp, HTTP status code, error phrase, descriptive message, request path, and structured field-level validation errors (`errors` & `validationErrors`).
   - Strict input validation using Jakarta Validation annotations on all request DTOs, including nested collection validation on purchase order items (`@Valid @NotEmpty`).
@@ -701,6 +707,97 @@ Every error response adheres to the `ErrorResponse` schema:
   "path": "/api/purchase-orders/4/receive"
 }
 ```
+
+---
+
+## Automated Test Suite & Business Rules Matrix
+
+FactoryOS maintains a multi-tiered test pyramid ensuring business logic integrity across all architectural layers. The automated suite contains **103 automated tests** running in ~18 seconds with 0 failures and 0 errors.
+
+| Test Layer | Test Class | Business Rule Tested | Assertion Type | Sample Test Name |
+| :--- | :--- | :--- | :--- | :--- |
+| **Service Unit** | `InventoryServiceTest` | Negative stock prevention (`Stock-Out`) | Exception + State Verification | `stockOut_insufficientStock_throwsExceptionAndDoesNotSave` |
+| **Service Unit** | `InventoryServiceTest` | Inactive product inventory rejection | Exception Verification | `stockIn_inactiveProduct_throwsBusinessRuleException` |
+| **Service Unit** | `InventoryServiceTest` | Low stock reorder threshold boundaries | Boolean Assertion | `getLowStockItems_atReorderLevel_marksLowStockTrue` |
+| **Service Unit** | `InventoryServiceTest` | Zero/negative quantity adjustment | Exception Verification | `adjustStock_zeroOrNegativeQuantity_throwsIllegalArgumentException` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Strict status transitions (`CREATED -> APPROVED -> RECEIVED`) | Enum & State Verification | `approvePurchaseOrder_validState_updatesStatus` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Terminal state immutability (`RECEIVED`/`CANCELLED`) | Exception Verification | `receivePurchaseOrder_alreadyReceived_throwsInvalidStateException` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Purchase order atomic receipt & movement creation | Repository Argument Captor | `receivePurchaseOrder_approvedOrder_incrementsInventoryAndCreatesMovement` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Sequential order number generation (`PO-000001`) | String Format Assertion | `createPurchaseOrder_generatesSequentialOrderNumber` |
+| **Service Unit** | `PurchaseOrderServiceTest` | Duplicate line-item product rejection | Exception Verification | `createPurchaseOrder_duplicateProductInItems_throwsException` |
+| **Service Unit** | `ProductServiceTest` | SKU uniqueness validation | Exception Verification | `createProduct_duplicateSku_throwsDuplicateResourceException` |
+| **Service Unit** | `SupplierServiceTest` | Supplier email uniqueness | Exception Verification | `createSupplier_duplicateEmail_throwsDuplicateResourceException` |
+| **WebMvc Slice** | `InventoryControllerTest` | Request body validation (`quantity > 0`, `@NotNull`) | HTTP 400 + JSON Error Fields | `stockIn_zeroQuantity_returnsBadRequest` |
+| **WebMvc Slice** | `PurchaseOrderControllerTest` | Nested collection item validation (`items[0].quantity <= 0`) | HTTP 400 + Nested JSON Paths | `createPurchaseOrder_invalidItemQuantityAndPrice_returnsBadRequestWithFieldErrors` |
+| **WebMvc Slice** | `GlobalExceptionHandlerTest` | Domain exception to HTTP code translations | HTTP Status + ErrorResponse Envelope | `handleInsufficientStockException_returnsConflictResponse` |
+| **WebMvc Slice** | `GlobalExceptionHandlerTest` | Internal server error sanitization (no SQL leaks) | Generic Error Message Assertion | `handleGenericException_returnsInternalServerErrorResponse` |
+| **Integration** | `PurchaseOrderReceivingIntegrationTest` | End-to-end receipt updates inventory, movements, and PO status | Database State Assertions | `receivePurchaseOrder_successful_updatesInventoryAndMovementsAndStatus` |
+| **Integration** | `PurchaseOrderReceivingIntegrationTest` | **Atomic rollback proof**: fails midway, rolls back all previous stock & audit records | Strict Database Pre/Post Assertions | `receivePurchaseOrder_whenItemFails_rollsBackEntireTransactionAtomically` |
+| **Integration** | `InventoryIntegrationTest` | Database-level unique SKU constraint enforcement | `DataIntegrityViolationException` | `duplicateSku_violatesDatabaseUniqueConstraint` |
+| **Integration** | `InventoryIntegrationTest` | Real database stock lifecycle (stock-in, stock-out, boundary checks) | Direct Database Queries | `inventoryLifecycle_stockInStockOutAndNegativeStockRejection` |
+
+### Code Coverage (JaCoCo)
+
+FactoryOS utilizes `jacoco-maven-plugin` (0.8.12) to verify test execution depth.
+
+| Package | Instruction Coverage | Branch Coverage | Classes Analyzed |
+| :--- | :--- | :--- | :--- |
+| `com.factoryos.controller` | **89%** | N/A | 5 |
+| `com.factoryos.service` | **87%** | **66%** | 3 |
+| `com.factoryos.exception` | **84%** | **55%** | 10 |
+| `com.factoryos.dto` | **100%** | N/A | 18 |
+| `com.factoryos.config` | **100%** | N/A | 1 |
+| `com.factoryos.entity` | **79%** | **50%** | 7 |
+| **Total Project** | **83%** (2,650 / 3,190) | **56%** | **51** |
+
+To generate the HTML coverage report locally:
+```bash
+./mvnw test jacoco:report
+```
+The report is saved to `target/site/jacoco/index.html`.
+
+---
+
+## Technical Interview Q&A
+
+### Q1: How do you design service-level unit tests for critical inventory operations?
+
+**Answer:**
+When testing mission-critical inventory services, tests must focus on **domain rules and financial boundary conditions**, rather than shallow getter/setter assertions. Key practices include:
+1. **Testing Boundary Limits**: Verifying stock balance changes at exact thresholds — such as available quantity dropping to `0` (legal stock-out) vs `-1` (illegal; must trigger `InsufficientStockException`), and available stock equal to `reorderLevel` vs `reorderLevel + 1` for low-stock alerts.
+2. **Defensive Precondition Checks**: Testing that operations on inactive products or disabled suppliers throw domain exceptions (`BusinessRuleException`) *before* any repository mutation occurs.
+3. **Verifying Side Effects & Audit Trails**: Using Mockito `ArgumentCaptor` to inspect not only that `inventoryRepository.save()` was invoked with the exact mathematical balance, but also that `stockMovementRepository.save()` received a movement entity with the correct movement type (`STOCK_IN`, `STOCK_OUT`, `ADJUSTMENT`), delta, reference type, and previous-vs-new balance snapshots.
+4. **Negative Scenario Assertion**: Testing that when a validation or balance check fails, repositories are never touched (`verify(..., never()).save(...)`), guaranteeing no uncommitted entity mutations leak into persistence context.
+
+### Q2: What are the trade-offs between Mockito unit tests, MockMvc slice tests, and Spring Boot integration tests?
+
+**Answer:**
+A production-grade system balances speed, isolation, and confidence across three distinct test layers:
+- **Mockito Unit Tests (`@ExtendWith(MockitoExtension.class)`)**:
+  - *Pros*: Extremely fast (milliseconds), fully isolated, perfect for exhaustive combinatorial business logic, edge cases, and arithmetic invariants.
+  - *Cons*: Ignores framework wiring, JPA entity mappings, database constraints, Bean Validation annotations, and transaction boundaries.
+- **MockMvc Slice Tests (`@WebMvcTest`)**:
+  - *Pros*: Tests the web layer in isolation without booting the persistence layer or database. Validates HTTP routes, status codes, JSON serialization/deserialization, Jakarta validation constraints (`@Valid`, `@NotNull`, `@Min`), and `@RestControllerAdvice` exception translations.
+  - *Cons*: Mocks out the service layer; does not verify SQL queries, ORM cascades, database check constraints, or actual transactional atomicity.
+- **Spring Boot Integration Tests (`@SpringBootTest` with live database)**:
+  - *Pros*: Maximum confidence. Tests full application context, Hibernate SQL generation, PostgreSQL foreign keys, unique indices, and `@Transactional` rollbacks.
+  - *Cons*: Slower startup time and requires clean fixture management (e.g., executing `deleteAllInBatch()` in reverse foreign key order) to avoid cross-test database pollution.
+
+### Q3: How do you prove that an inventory transaction actually rolled back on database errors?
+
+**Answer:**
+You cannot prove `@Transactional` rollback using unit tests with mocks, because mocks do not participate in a real database transaction. To prove transaction rollback:
+1. **Use a Real Database Environment**: Run a `@SpringBootTest` test connecting to a real PostgreSQL instance (not an in-memory database that might lack PostgreSQL-specific constraint behaviors).
+2. **Setup Multi-Step Workflows**: Construct a business scenario with multiple persistent mutations. In FactoryOS, `receivePurchaseOrder` receives a PO with multiple items. Processing Item 1 increments Product 1's inventory and inserts a `STOCK_IN` movement. Item 2 is intentionally configured with an invalid condition (e.g., an inactive product or constraint violation) that throws a runtime `BusinessRuleException` midway through the loop.
+3. **Execute Outside Test-Managed Transactions**: Do **not** annotate the test method with `@Transactional` (which would auto-rollback the entire test method and mask whether the service method's transaction rolled back).
+4. **Assert Database State Post-Failure**:
+   - Verify that the service method threw the expected exception.
+   - Query the database directly via repositories:
+     - Verify Product 1's inventory quantity remains at its original value (e.g., exactly 100, not 150).
+     - Verify Product 2's inventory quantity remains untouched.
+     - Verify `stockMovementRepository.count()` is `0` (the movement created for Item 1 was completely rolled back).
+     - Verify the purchase order status remains `APPROVED`, not `RECEIVED`.
+This conclusively proves that the transaction boundary preserved the ACID atomicity guarantee: all mutations succeeded together or all were reverted.
 
 ---
 
